@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; frame-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+    <title>My Time | GmailWeaver</title>
+    <script type="module" src="/src/pages/mytime.js"></script>
+  </head>
+
+  <body class="page-mytime">
+    <div class="container body">
+      <div class="main_container">
+
+        <div id="app-header"></div>
+
+        <main class="right_col" role="main">
+          <div class="mt-page">
+
+            <div class="mt-page-header">
+              <div class="mt-title">My <span>Time</span></div>
+              <div id="account-picker-mount"></div>
+              <div class="mt-mode-toggle">
+                <button class="mt-mode-btn active" data-mode="month">월별</button>
+                <button class="mt-mode-btn" data-mode="year">연별</button>
+              </div>
+            </div>
+
+            <div class="mt-layout">
+
+              <!-- 좌측: 나 아바타 + "{아이디}'s Time" -->
+              <aside class="mt-side">
+                <div class="mt-side-title" id="mtSideTitle">My <span>Time</span></div>
+
+                <div class="mt-side-avatar" id="mtSideAvatar">
+                  <span class="mt-side-avatar-fallback">나</span>
+                </div>
+
+                <div class="mt-side-stat">
+                  <div class="mt-side-stat-label">지금 보는 시점</div>
+                  <div class="mt-side-stat-value" id="mtSideNow">—</div>
+                </div>
+
+                <div class="mt-side-range">
+                  <i class="bi bi-clock-history"></i><span id="mtSideRange"></span>
+                </div>
+              </aside>
+
+              <!-- 우측: 타임라인 요약 + 슬라이더 -->
+              <div class="mt-col-main">
+                <div class="mt-main" id="mainCard">
+                  <div class="mt-track" id="track"></div>
+                  <div class="mt-info-area">
+                    <div class="mt-panel" id="infoPanel">
+                      <div class="mt-panel-top">
+                        <div class="mt-panel-period" id="panelPeriod"></div>
+                        <div class="mt-panel-count" id="panelCount"></div>
+                      </div>
+                      <div class="mt-panel-summary" id="panelSummary"></div>
+                      <div class="mt-panel-contacts-title">주요 연락처</div>
+                      <div class="mt-panel-contacts" id="panelContacts"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 포인터 -->
+                <div class="mt-pointer-wrap">
+                  <div class="mt-pointer-label">전체 타임라인 — 클릭으로 이동</div>
+                  <div class="mt-pointer-track" id="pointerTrack">
+                    <div class="mt-pointer-bg"></div>
+                    <div class="mt-pointer-window" id="pointerWindow"></div>
+                    <div class="mt-pointer-cursor" id="pointerCursor"><span class="mt-pointer-cursor-fallback">나</span></div>
+                  </div>
+                  <div class="mt-pointer-axis" id="pointerAxis"></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </main>
+        <footer id="app-footer"></footer>
+      </div>
+    </div>
+  </body>
+</html>

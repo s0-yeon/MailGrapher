@@ -1,0 +1,501 @@
+import time
+import os
+import sys
+import re
+import subprocess
+import threading  
+import traceback
+import openai
+import networkx as nx
+
+from util.jobs.job_store import update_job, append_job_log
+from util.graphrag_progress import get_stage_progress
+from util.sse_broadcaster import broadcast
+from util.user_path import user_graphrag_init
+# from config.settings import GRAPH_BUILD_SCRIPT, GRAPHRAG_ROOT, BASE_DIR
+
+from config.settings import MAIL_BLOCK_SEP
+from util.extract_statics import start_timer,end_timer,format_elapsed_time, _extract_statics_pipeline
+from util.database.db_writer import create_user,save_person_stats_to_db,save_keyword_stats_to_db, save_label_to_db, save_mail_to_db, collect_indexing_stats, update_user_indexing_stats
+from util.mail_summary import generate_mail_summaries
+
+# output 폴더를 3초 간격으로 감시해 인덱싱 단계 변화를 job 진행도에 반영
+# base_progress: subprocess 실행 전 세팅된 초기 진행도 — 이보다 낮은 값으로 되돌리지 않음
+# stop_event가 세트되면 루프 종료 (build_graphrag_index/update 완료 시 호출)
+def _watch_graphrag_output(job_id, output_dir, start_time, stop_event, base_progress=5):
+    current = base_progress
+    while not stop_event.wait(3):
+        stages = get_stage_progress(output_dir, start_time, reported_progress=current)
+        for prog, msg in stages:
+            current = prog
+            update_job(job_id, progress=prog, message=msg)
+            broadcast({"type": "progress", "job_id": job_id, "progress": prog, "message": msg})
+
+
+# 첨부파일 텍스트 요약 (공백/줄바꿈 제외 500자 미만이면 원문 그대로 반환)
+def _summarize_attachment_text(text: str,paths, filename: str) -> str:
+    pure_len = len(text.replace(" ", "").replace("\n", ""))
+    if pure_len < 500:
+        return text  # 짧은 텍스트는 요약 없이 그대로 반환
+
+    prompt_path = os.path.join( "parquet_template", "prompts", "summarize_attachment.txt")
+
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        prompt = f.read().strip()
+
+    client = openai.OpenAI(api_key=os.environ.get("GRAPHRAG_API_KEY"))
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"파일명: {filename}\n\n{text}"}
+            ],
+            max_tokens=150  # 한글 약 300자 기준
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[summarize_attachment error] {filename}: {e}")
+        return text  # 실패하면 원문 그대로 반환
+
+
+# 요약된 첨부 텍스트를 mail_latest.txt 각 메일 블록 하단에 삽입
+def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mail: dict):
+    if not os.path.exists(mail_latest_path):
+        return
+
+    with open(mail_latest_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    parts = content.split(MAIL_BLOCK_SEP)
+    merged_blocks = []
+
+    for part in parts:
+        block = part.strip()
+        if not block:
+            continue
+
+        # 구분선 복원
+        block_text = f"{MAIL_BLOCK_SEP}\n{block}\n{MAIL_BLOCK_SEP}"
+
+        # 블록에서 메일 ID 추출
+        m = re.search(r"^\s*ID:\s*(.+?)\s*$", block_text, re.MULTILINE)
+        mail_id = m.group(1).strip() if m else None
+
+        # 해당 메일 ID에 첨부 내용이 없으면 그대로 추가
+        if not mail_id or mail_id not in attachment_texts_by_mail:
+            merged_blocks.append(block_text)
+            continue
+
+        # 첨부 내용 섹션 생성
+        attachment_section = "\n[첨부 추출 내용]\n"
+        for item in attachment_texts_by_mail[mail_id]:
+            attachment_section += f"[File name] {item['name']}\n{item['text']}\n"
+
+        # 블록 하단(마지막 구분선 직전)에 첨부 내용 삽입
+        insert_pos = block_text.rfind(MAIL_BLOCK_SEP)
+        if insert_pos == -1:
+            merged_blocks.append(block_text + attachment_section)
+        else:
+            merged_blocks.append(
+                block_text[:insert_pos].rstrip() + "\n\n" +
+                attachment_section.rstrip() + "\n" +
+                MAIL_BLOCK_SEP
+            )
+
+    # 병합 결과를 mail_latest.txt에 덮어씀
+    with open(mail_latest_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(merged_blocks) + "\n")
+
+
+# 백그라운드: 메일 텍스트를 그래프 데이터 JSON으로 변환
+def build_graph_json(job_id, paths, env):
+    print(f"[JOB][mail2json] START job_id={job_id}")
+    print(f"[JOB][mail2json] cwd={os.getcwd()}")
+    print(f"[JOB][mail2json] sys.executable={sys.executable}")
+    print(f"[JOB][mail2json] GRAPH_BUILD_SCRIPT={paths.GRAPH_BUILD_SCRIPT}")
+    print(f"[JOB][mail2json] script_exists={os.path.exists(paths.GRAPH_BUILD_SCRIPT)}")
+
+    update_job(job_id, progress=5, message="메일 텍스트를 그래프 데이터 JSON으로 변환 중")
+    append_job_log(job_id, "[START] build_graph_json")
+    append_job_log(job_id, f"[INFO] cwd={os.getcwd()}")
+    append_job_log(job_id, f"[INFO] sys.executable={sys.executable}")
+    append_job_log(job_id, f"[INFO] GRAPH_BUILD_SCRIPT={paths.GRAPH_BUILD_SCRIPT}")
+    append_job_log(job_id, f"[INFO] script_exists={os.path.exists(paths.GRAPH_BUILD_SCRIPT)}")
+
+    # GraphRAG CLI 실행 명령어 구성
+    cmd = [
+        sys.executable, "-u", "-X", "utf8", 
+        paths.GRAPH_BUILD_SCRIPT,
+        "--base-dir", paths.BASE_DIR,
+        "--user-id", paths.USER_ID
+        ]
+    print(f"[JOB][mail2json] CMD={cmd}")
+
+    append_job_log(job_id, f"[CMD] {cmd}")
+
+    try:
+        # 파이썬 스크립트 실행
+        subprocess.run(
+            cmd,
+            check=True,         # 실패 시 exception 발생
+            stdout=sys.stdout,  # 출력 → 서버 콘솔로 바로 전달
+            stderr=sys.stderr,  # 에러 → 서버 콘솔로 바로 전달
+            env=env,            # 환경변수 전달
+        )
+
+        append_job_log(job_id, "[END] build_graph_json success")
+        update_job(job_id, progress=15, message="그래프 데이터 JSON 생성 완료")
+        print(f"[JOB][parquet2json] SUCCESS job_id={job_id}")
+
+    except Exception as e:
+        print(f"[JOB][parquet2json][ERROR] job_id={job_id} error={e}")
+        traceback.print_exc()
+        append_job_log(job_id, f"[ERROR] build_graph_json failed: {e}")
+        raise
+
+
+def _trim_mail_latest(paths, max_mails, job_id):
+    if not os.path.exists(paths.MAIL_LATEST_PATH):
+        return
+    with open(paths.MAIL_LATEST_PATH, 'r', encoding='utf-8') as f:
+        content = f.read()
+    blocks = [p.strip() for p in content.split(MAIL_BLOCK_SEP) if p.strip()]
+    if len(blocks) <= max_mails:
+        return
+    trimmed = blocks[:max_mails]
+    result = '\n'.join(
+        f"{MAIL_BLOCK_SEP}\n{b}\n{MAIL_BLOCK_SEP}" for b in trimmed
+    ) + '\n'
+    with open(paths.MAIL_LATEST_PATH, 'w', encoding='utf-8') as f:
+        f.write(result)
+
+    # CSV도 트리밍 (GraphRAG는 csv를 읽음)
+    trimmed_ids = set()
+    for block in trimmed:
+        m = re.search(r'^\s*ID:\s*(.+?)\s*$', block, re.MULTILINE)
+        if m:
+            trimmed_ids.add(m.group(1).strip())
+    csv_path = paths.MAIL_LATEST_PATH.replace('.txt', '.csv')
+    if os.path.exists(csv_path) and trimmed_ids:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        id_col = next((c for c in df.columns if 'id' in c.lower()), None)
+        if id_col:
+            df = df[df[id_col].astype(str).isin(trimmed_ids)]
+            df.to_csv(csv_path, index=False)
+
+    msg = f"[max_mails] {len(blocks)}개 중 {max_mails}개만 인덱싱"
+    print(f"[JOB][graphrag] {msg}")
+    append_job_log(job_id, f"[INFO] {msg}")
+
+
+# 백그라운드: GraphRAG 인덱싱
+def build_graphrag_index(job_id, paths, env, max_mails=None):
+    print(f"[JOB][graphrag] START job_id={job_id}")
+    print(f"[JOB][graphrag] cwd={os.getcwd()}")
+    print(f"[JOB][graphrag] sys.executable={sys.executable}")
+    print(f"[JOB][graphrag] GRAPHRAG_ROOT={paths.GRAPHRAG_ROOT}")
+    print(f"[JOB][graphrag] root_exists={os.path.exists(paths.GRAPHRAG_ROOT)}")
+
+    update_job(job_id, progress=20, message="GraphRAG 인덱싱 시작")
+    append_job_log(job_id, "[START] build_graphrag_index")
+    append_job_log(job_id, f"[INFO] cwd={os.getcwd()}")
+    append_job_log(job_id, f"[INFO] sys.executable={sys.executable}")
+    append_job_log(job_id, f"[INFO] GRAPHRAG_ROOT={paths.GRAPHRAG_ROOT}")
+    append_job_log(job_id, f"[INFO] root_exists={os.path.exists(paths.GRAPHRAG_ROOT)}")
+
+    if max_mails is not None:
+        _trim_mail_latest(paths, max_mails, job_id)
+
+    #user_graphrag_init(paths)
+
+    # GraphRAG CLI 실행 명령어 구성
+    cmd = [
+        sys.executable,
+        "-u",              # stdout/stderr 버퍼링 최소화
+        "-X", "utf8",
+        "-m", "graphrag",  # graphrag 모듈 실행
+        "index",           # graphrag 모듈의 index 명령
+        "--root", paths.GRAPHRAG_ROOT
+    ]
+
+    env = env.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    print(f"[JOB][graphrag] CMD={cmd}")
+    append_job_log(job_id, f"[CMD] {cmd}")
+
+    output_dir = os.path.join(paths.GRAPHRAG_ROOT, "output")
+    start_time = time.time()
+    stop_event = threading.Event()
+    watcher = threading.Thread(
+        target=_watch_graphrag_output,
+        args=(job_id, output_dir, start_time, stop_event, 5),
+        daemon=True,
+    )
+    watcher.start()
+
+    try:
+        update_job(job_id, progress=30, message="GraphRAG 인덱싱 실행 중")
+
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            env=env,
+        )
+
+        append_job_log(job_id, "[END] build_graphrag_index success")
+        update_job(job_id, progress=90, message="GraphRAG 인덱싱 완료")
+        print(f"[JOB][graphrag] SUCCESS job_id={job_id}")
+
+    except Exception as e:
+        print(f"[JOB][graphrag][ERROR] job_id={job_id} error={e}")
+        traceback.print_exc()
+        append_job_log(job_id, f"[ERROR] build_graphrag_index failed: {e}")
+        raise
+
+    finally:
+        stop_event.set()
+        watcher.join(timeout=5)
+
+
+# 백그라운드: GraphRAG 업데이트 (증분)
+def build_graphrag_update(job_id,paths, env):
+    print(f"[JOB][graphrag-update] START job_id={job_id}")
+    print(f"[JOB][graphrag-update] cwd={os.getcwd()}")
+    print(f"[JOB][graphrag-update] sys.executable={sys.executable}")
+    print(f"[JOB][graphrag-update] GRAPHRAG_ROOT={paths.GRAPHRAG_ROOT}")
+    print(f"[JOB][graphrag-update] root_exists={os.path.exists(paths.GRAPHRAG_ROOT)}")
+
+    update_job(job_id, progress=20, message="GraphRAG 업데이트 시작")
+    append_job_log(job_id, "[START] build_graphrag_update")
+    append_job_log(job_id, f"[INFO] cwd={os.getcwd()}")
+    append_job_log(job_id, f"[INFO] sys.executable={sys.executable}")
+    append_job_log(job_id, f"[INFO] GRAPHRAG_ROOT={paths.GRAPHRAG_ROOT}")
+    append_job_log(job_id, f"[INFO] root_exists={os.path.exists(paths.GRAPHRAG_ROOT)}")
+    
+
+    # GraphRAG CLI 실행 명령어 구성
+    cmd = [
+        sys.executable,
+        "-u",              # stdout/stderr 버퍼링 최소화
+        "-X", "utf8",
+        "-m", "graphrag",  # graphrag 모듈 실행
+        "update",          # graphrag 모듈 update 명령
+        "--root", paths.GRAPHRAG_ROOT
+    ]
+
+    env = env.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    print(f"[JOB][graphrag] CMD={cmd}")
+    append_job_log(job_id, f"[CMD] {cmd}")
+
+    update_output_base = os.path.join(paths.GRAPHRAG_ROOT, "output")
+    start_time = time.time()
+    stop_event = threading.Event()
+    watcher = threading.Thread(
+        target=_watch_graphrag_output,
+        args=(job_id, update_output_base, start_time, stop_event, 5),
+        daemon=True,
+    )
+    watcher.start()
+
+    try:
+        update_job(job_id, progress=30, message="GraphRAG 업데이트 실행 중")
+
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            env=env,
+        )
+
+        append_job_log(job_id, "[END] build_graphrag_update success")
+        update_job(job_id, progress=90, message="GraphRAG 업데이트 완료")
+        print(f"[JOB][graphrag-update] SUCCESS job_id={job_id}")
+
+        # 새로운 데이터 graphml과 현재 존재하는 output graphml 병합
+        output_graphml = os.path.join(paths.GRAPHRAG_ROOT, "output", "graph.graphml")
+        update_output_dir = os.path.join(paths.GRAPHRAG_ROOT, "update_output")
+        
+        # latest = sorted(os.listdir(update_output_dir))[-1]
+        if not os.path.exists(update_output_dir):
+            print(f"[JOB][graphrag-update] update_output 없음 — 새 문서 없음으로 처리")
+            append_job_log(job_id, "[INFO] update_output not found, no new documents")
+            return  # 정상 종료
+
+        latest = sorted(os.listdir(update_output_dir))[-1]
+
+        delta_graphml = os.path.join(update_output_dir, latest, "delta", "graph.graphml")
+
+        if os.path.exists(delta_graphml):
+            G_output = nx.read_graphml(output_graphml)  # 기존 graphml
+            G_delta = nx.read_graphml(delta_graphml)    # 새로운 graphml
+            G_merged = nx.compose(G_output, G_delta)    # 두 graphml 병합
+            nx.write_graphml(G_merged, output_graphml)  # 병합 결과 기존 graphml에 덮어씀
+
+    except Exception as e:
+        print(f"[JOB][graphrag-update][ERROR] job_id={job_id} error={e}")
+        traceback.print_exc()
+        append_job_log(job_id, f"[ERROR] build_graphrag_update failed: {e}")
+        raise
+
+    finally:
+        stop_event.set()
+        watcher.join(timeout=5)
+
+
+# 전체 파이프라인 실행 (index 기준)
+def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None):
+    print(f"[JOB][pipeline] START job_id={job_id}")
+    append_job_log(job_id, "[START] run_graph_pipeline")
+
+    user_graphrag_init(paths)
+    try:
+        update_job(job_id, progress=0, status="running", message="작업 시작")
+
+        # 첨부파일 요약 후 mail_latest.txt에 병합 (백그라운드에서 처리)
+        if attachment_texts_by_mail:
+            print(f"[JOB][summarize] START job_id={job_id}")
+            update_job(job_id, progress=5, message="첨부파일 요약 중")
+
+            # 각 첨부파일 텍스트를 요약으로 교체
+            summarized_by_mail = {}
+            for mail_id, items in attachment_texts_by_mail.items():
+                summarized_by_mail[mail_id] = [
+                    {
+                        "name": item["name"],
+                        "text": _summarize_attachment_text(item["text"],paths, item["name"])
+                    }
+                    for item in items
+                ]
+
+            # 요약된 첨부 내용을 mail_latest.txt 각 블록에 삽입
+            _merge_summarized_attachments(paths.MAIL_LATEST_PATH, summarized_by_mail)
+            print(f"[JOB][summarize] DONE job_id={job_id}")
+
+        timer = start_timer() #인덱싱 시간 측정용, 측정 시작
+        build_graphrag_index(job_id, paths, env, max_mails=max_mails)
+        time_result = end_timer(timer) #인덱싱 시간 측정용, 측정 끝
+
+        build_graph_json(job_id,paths, env)
+
+        formatted_time = format_elapsed_time(time_result["elapsed_sec"])
+
+        _extract_statics_pipeline(paths, mode='rewrite')
+        target_update_date = time_result["ended_at"]
+
+        create_user(
+                user_account_id=paths.USER_ID,
+                ended_at=target_update_date,
+                index_time=formatted_time,
+                my_mail_count=added_count
+            )
+        indexing_stats = collect_indexing_stats(paths)
+        update_user_indexing_stats(paths.USER_ID, None, indexing_stats)
+        db_threads = [
+            threading.Thread(target=save_person_stats_to_db, args=(paths, target_update_date)),
+            threading.Thread(target=save_label_to_db, args=(paths, target_update_date)),
+            threading.Thread(target=save_mail_to_db, args=(paths, target_update_date)),
+            threading.Thread(target=save_keyword_stats_to_db, args=(paths, target_update_date)),
+            threading.Thread(target=generate_mail_summaries, args=(paths,)),
+        ]
+        for t in db_threads: t.start()
+        for t in db_threads: t.join()
+
+
+        update_job(job_id, progress=100, status="done", message="인덱싱 완료")
+        broadcast({"type": "done", "job_id": job_id, "message": "인덱싱 완료"})
+        append_job_log(job_id, "[END] run_graph_pipeline success")
+        print(f"[JOB][pipeline] SUCCESS job_id={job_id}")
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        update_job(job_id, status="failed", message=error_msg)
+        broadcast({"type": "failed", "job_id": job_id, "message": error_msg})
+        append_job_log(job_id, f"[ERROR] run_graph_pipeline failed: {error_msg}")
+        print(f"[JOB][pipeline][ERROR] job_id={job_id} error={error_msg}")
+        traceback.print_exc()
+
+
+# 업데이트 파이프라인 실행
+def run_graph_update_pipeline(job_id, paths, env):
+    print(f"[JOB][update-pipeline] START job_id={job_id}")
+    append_job_log(job_id, "[START] run_graph_update_pipeline")
+
+    user_graphrag_init(paths)
+    try:
+        update_job(job_id, progress=0, status="running", message="업데이트 작업 시작")
+
+        # 1단계: graphrag 업데이트
+        build_graphrag_update(job_id,paths, env)
+
+        # 2단계: json 생성 
+        build_graph_json(job_id,paths, env)
+
+        _extract_statics_pipeline(paths, mode='append')
+        indexing_stats = collect_indexing_stats(paths)
+        update_user_indexing_stats(paths.USER_ID, None, indexing_stats)
+        db_threads = [
+            threading.Thread(target=save_person_stats_to_db, args=(paths,)),
+            threading.Thread(target=save_mail_to_db, args=(paths,)),
+            threading.Thread(target=save_keyword_stats_to_db, args=(paths,)),
+        ]
+        for t in db_threads: t.start()
+        for t in db_threads: t.join()
+
+
+        update_job(job_id, progress=100, status="done", message="업데이트 완료")
+        broadcast({"type": "done", "job_id": job_id, "message": "업데이트 완료"})
+        append_job_log(job_id, "[END] run_graph_update_pipeline success")
+        print(f"[JOB][update-pipeline] SUCCESS job_id={job_id}")
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        update_job(job_id, status="failed", message=error_msg, error=error_msg)
+        broadcast({"type": "failed", "job_id": job_id, "message": error_msg})
+        append_job_log(job_id, f"[ERROR] run_graph_update_pipeline failed: {error_msg}")
+        print(f"[JOB][update-pipeline][ERROR] job_id={job_id} error={error_msg}")
+        traceback.print_exc()
+
+
+# 백그라운드 전체 파이프라인 실행 (index 기준)
+def start_graph_pipeline_background(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None):
+    print(f"[JOB][pipeline] BACKGROUND START job_id={job_id}")
+    append_job_log(job_id, "[INFO] background thread starting")
+
+    # 새로운 스레드 생성
+    t = threading.Thread(
+
+        target=run_graph_pipeline,  # 실행할 함수: 그래프라그 파이프라인 (인덱싱) 실행 함수
+        args=(job_id, paths, env.copy(), attachment_texts_by_mail, added_count, max_mails),
+        daemon=True,                # app.py 종료 시 같이 종료
+    )
+    t.start()  # 스레드 실행 (비동기 시작)
+
+    print(f"[JOB][pipeline] BACKGROUND THREAD STARTED job_id={job_id} thread={t.name}")
+    append_job_log(job_id, f"[INFO] background thread started name={t.name}")
+    return t
+
+
+# 백그라운드 스레드 시작 - 업데이트
+def start_graph_update_pipeline_background(job_id,paths, env):
+    print(f"[JOB][update-pipeline] BACKGROUND START job_id={job_id}")
+    append_job_log(job_id, "[INFO] update background thread starting")
+
+    t = threading.Thread(
+        target=run_graph_update_pipeline, # 실행할 함수 : 그래프라그 업데이트파이프라인 실행 함수
+        args=(job_id,paths, env.copy()),
+        daemon=True,                      # app.py 종료 시 같이 종료
+
+    )
+    t.start()  # 스레드 실행 (비동기 시작)
+
+    print(f"[JOB][update-pipeline] BACKGROUND THREAD STARTED job_id={job_id} thread={t.name}")
+    append_job_log(job_id, f"[INFO] update background thread started name={t.name}")
+    return t
