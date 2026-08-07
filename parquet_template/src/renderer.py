@@ -80,16 +80,20 @@ class PromptTemplate:
         # settings.j2 렌더링
         self._render_settings(config)
 
-# configs/ 밑의 모든 도메인 config를 스캔해서, rendered/{domain}/settings.yaml이 없거나 config보다 오래된(즉 config 수정 후 아직 반영 안 된) 도메인만 렌더링
+# configs/ 밑의 모든 도메인 config를 스캔해서, settings.yaml이 없거나 config·.j2 템플릿보다 오래된(즉 수정 후 아직 반영 안 된) 도메인만 렌더링
 def render_all_domains():
     configs_dir = Path(__file__).parent/"configs"
+    templates_dir = Path(__file__).parent/"prompts"
     rendered_dir = Path(__file__).parent.parent/"rendered"
+
+    template_mtime = max((p.stat().st_mtime for p in templates_dir.glob("*.j2")), default=0)
 
     for config_path in configs_dir.glob("*.json"):
         domain = config_path.stem
         settings_path = rendered_dir/domain/"settings.yaml"
+        source_mtime = max(config_path.stat().st_mtime, template_mtime)
 
-        if settings_path.exists() and settings_path.stat().st_mtime >= config_path.stat().st_mtime:
+        if settings_path.exists() and settings_path.stat().st_mtime >= source_mtime:
             print(f"[skip] {domain}: up to date")
             continue
 
