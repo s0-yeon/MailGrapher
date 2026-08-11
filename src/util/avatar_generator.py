@@ -17,9 +17,7 @@ load_dotenv("src/parquet/.env")
 
 client = OpenAI(api_key=os.getenv("GRAPHRAG_API_KEY"))
 
-# 성별/발신자(기업) 판별은 그대로 OpenAI(gpt-4o-mini) 텍스트 모델을 사용하고,
-# 아바타 이미지 생성만 로컬 FLUX.1-schnell로 처리한다.
-FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell"
+FLUX_MODEL_ID = os.environ["IMAGE_MODEL"]
 AVATAR_SIZE = 512
 AVATAR_STEPS = 4
 AVATAR_GUIDANCE_SCALE = 0.0
