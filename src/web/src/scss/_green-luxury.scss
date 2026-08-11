@@ -328,16 +328,10 @@ body {
 }
 
 // ── 상단 네비게이션 ───────────────────────────────────────────────────────────
+// 투명/고정 처리는 _header.scss에서 전체 사이트 공통으로 담당
 .top_nav {
-  background: #fff !important;
-  border-bottom: 1px solid var(--gt-border-color) !important;
-  box-shadow: 0 1px 0 var(--gt-border-color), 0 2px 12px rgba(15, 36, 25, 0.05) !important;
-  min-height: 60px !important;
-
   .nav_menu {
-    background: #fff !important;
-    min-height: 60px !important;
-    padding: 0 8px !important;
+    padding: 0 24px !important;
   }
 }
 

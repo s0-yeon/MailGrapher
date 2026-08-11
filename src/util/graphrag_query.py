@@ -3,6 +3,7 @@
 
 import os
 import re
+import json
 import asyncio # 비동기 실행 지원 (LocalSearch/GlobalSearch.search()가 async 함수라 필요)
 import traceback
 import threading
@@ -30,7 +31,7 @@ def _save_federated_query(accounts_paths: list, primary_user_id: str, original_m
 
     # 어떤 계정이 실제로 근거가 됐는지 확신할 수 없으면(로컬 검색에서 인용이 하나도 안 잡힌 경우 등)
     # 참여 계정 전체로 채워넣지 않고 그냥 비워둔다 — 억지로 채운 값은 틀린 정보를 남기는 것과 같음
-    refer_kg = ", ".join(refer_accounts) if refer_accounts else None
+    refer_kg = json.dumps(refer_accounts) if refer_accounts else None
 
     try:
         save_query_to_db(
@@ -305,28 +306,28 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
 
                 answer = '\n\n'.join(_fix_paragraph_sender(p) for p in answer.split('\n\n'))
 
-                # 계정 이메일은 22자짜리 무작위 Message-ID보다 훨씬 짧고 컨텍스트에 반복 등장해서
-                # LLM이 그대로 옮겨 적기 쉬우므로, ID→계정 역추적 대신 LLM이 직접 쓴 '계정:' 값을 우선 신뢰한다.
-                # 실제 인덱싱된 계정 목록에 없는 값(오타/환각)은 조용히 버린다 — 확신 없는 건 안 보여준다는 원칙 유지.
-                valid_accounts = {p.USER_ID.strip().lower(): p.USER_ID for p, _ in engines}
-                cited_accounts = []
-                for m in re.findall(r'계정:\s*(\S+)', answer):
-                    real = valid_accounts.get(_strip_id_punct(m).strip().lower())
-                    if real:
-                        cited_accounts.append(real)
+                # 항목마다 ID가 있으면 그 ID로 진짜 소속 계정을 역추적하는 쪽이 정확하다(위 발신인 교정과 동일한 방식).
+                # LLM이 직접 쓴 '계정:' 값은 여러 계정 데이터를 요약하면서 항목별로 정확히 구분하지 못하고
+                # 전부 같은 계정으로 잘못 적는 경우가 있어, ID를 못 찾았을 때만 쓰는 폴백으로 둔다.
+                found = [_strip_id_punct(m) for m in re.findall(r'ID:\s*(\S+)', answer)]
+                found = [m for m in found if _is_plausible_mail_id(m)]
+                seen = set()
+                source_ids = []
+                for id in found:
+                    if id not in seen:
+                        seen.add(id)
+                        source_ids.append({"id": id, "account": _resolve_account(id)})
 
-                if cited_accounts:
+                if not source_ids:
+                    # ID를 하나도 못 찾았을 때(요약형 답변 등)만 LLM이 쓴 '계정:' 값으로 폴백.
+                    # 실제 인덱싱된 계정 목록에 없는 값(오타/환각)은 조용히 버린다 — 확신 없는 건 안 보여준다는 원칙 유지.
+                    valid_accounts = {p.USER_ID.strip().lower(): p.USER_ID for p, _ in engines}
+                    cited_accounts = []
+                    for m in re.findall(r'계정:\s*(\S+)', answer):
+                        real = valid_accounts.get(_strip_id_punct(m).strip().lower())
+                        if real:
+                            cited_accounts.append(real)
                     source_ids = [{"id": None, "account": acc} for acc in cited_accounts]
-                else:
-                    # LLM이 '계정:'을 안 썼을 때만 예전 ID 기반 역추적으로 폴백
-                    found = [_strip_id_punct(m) for m in re.findall(r'ID:\s*(\S+)', answer)]
-                    found = [m for m in found if _is_plausible_mail_id(m)]
-                    seen = set()
-                    source_ids = []
-                    for id in found:
-                        if id not in seen:
-                            seen.add(id)
-                            source_ids.append({"id": id, "account": _resolve_account(id)})
 
                 display_answer = strip_ids_for_display(answer)
 

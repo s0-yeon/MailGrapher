@@ -1,0 +1,14 @@
+// SCSS files using @use (must come first)
+@use "bootstrap/scss/bootstrap";
+
+@use "./scss/variables"; // CSS custom properties and SCSS variables
+@use "./scss/color-schemes";
+
+@use "./scss/custom.scss";
+@use "./scss/green-luxury.scss"; // Luxury Green Design System
+@use "./scss/font-optimization.scss";
+@use "./scss/header.scss"; // 공통 헤더(appHeader.js) 스타일 + 사이드바 제거에 따른 레이아웃 보정
+
+// CSS files using @import (legacy approach for .css files)
+@import "@fortawesome/fontawesome-free/css/all.min.css";
+@import "bootstrap-icons/font/bootstrap-icons.min.css";

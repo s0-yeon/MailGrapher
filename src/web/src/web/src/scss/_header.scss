@@ -1,0 +1,91 @@
+// 공통 헤더(src/layout/appHeader.js)용 스타일.
+// 기존에 페이지마다 미세하게 다르게 복붙되어 있던 .gw-top-links 관련 규칙을 한 곳으로 통합.
+
+// 사이드바가 사라졌으므로 top_nav/right_col의 사이드바 오프셋을 항상 0으로 고정
+.top_nav {
+  margin-left: 0 !important;
+  left: 0;
+}
+.right_col {
+  margin-left: 0 !important;
+}
+
+.gw-top-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 16px;
+}
+.gw-tl {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #73879c;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1.4;
+
+  &:hover {
+    background: #f4f6f8;
+    color: #2a3f54;
+    text-decoration: none;
+  }
+  &.active {
+    color: #26b99a;
+    font-weight: 700;
+    background: #e8f7f4;
+  }
+}
+
+@media (max-width: 900px) {
+  .gw-top-links {
+    display: none;
+  }
+}
+
+.gw-tl-dropdown {
+  position: relative;
+}
+.gw-tl-dd-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  padding-top: 6px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  min-width: 140px;
+  padding: 6px 0;
+}
+.gw-tl-dropdown:hover .gw-tl-dd-menu {
+  display: block;
+}
+.gw-tl-dd-menu a {
+  display: block;
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  color: #2a3f54;
+  text-decoration: none;
+
+  &:hover {
+    background: #f4f6f8;
+    color: #26b99a;
+  }
+  &.active {
+    color: #26b99a;
+    font-weight: 700;
+  }
+}

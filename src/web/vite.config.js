@@ -1,4 +1,6 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -11,6 +13,13 @@ export default defineConfig({
   publicDir: 'public',
   logLevel: 'info',
   clearScreen: false,
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      // shadcn/ui 컴포넌트가 쓰는 "@/components/..." 임포트 경로용 별칭
+      '@': path.resolve(__dirname, 'src')
+    }
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -30,7 +39,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-core': ['bootstrap', '@popperjs/core'],
-          'vendor-d3': ['d3']
+          'vendor-d3': ['d3'],
+          'vendor-react': ['react', 'react-dom']
         },
         assetFileNames: assetInfo => {
           const originalName = assetInfo.names?.[0] ?? '';
@@ -130,7 +140,7 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['bootstrap', '@popperjs/core', 'd3'],
+    include: ['bootstrap', '@popperjs/core', 'd3', 'react', 'react-dom'],
     force: false
   },
   css: {
