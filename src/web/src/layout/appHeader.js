@@ -42,9 +42,18 @@ export function renderHeader(activePage) {
   mountPoint.innerHTML = `
     <div class="top_nav">
       <div class="nav_menu d-flex align-items-center justify-content-between">
-        <nav class="gw-top-links" style="margin-left:16px;">${navLinks}</nav>
+        <div class="d-flex align-items-center">
+          <a href="index.html" class="gw-brand-logo">
+            <img src="/images/hero/sphere.png" class="gw-brand-logo-icon" alt="">
+            <span class="gw-brand-logo-text">Mail Grapher</span>
+          </a>
+          <nav class="gw-top-links">${navLinks}</nav>
+        </div>
         <nav class="nav navbar-nav ms-auto">
           <ul class="navbar-right d-flex align-items-center gap-3 pe-3">
+            <li class="nav-item">
+              <button type="button" class="gw-login-btn">로그인</button>
+            </li>
             <li class="nav-item dropdown">
               <a href="#" role="button" class="dropdown-toggle" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="text-decoration:none;color:inherit;">
                 <i class="bi bi-translate" style="font-size:1.2rem;vertical-align:middle;"></i>

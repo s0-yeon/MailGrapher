@@ -293,9 +293,7 @@ body.nav-sm .left_col .menu_section h3 {
 }
 // Top navigation bar - uses Bootstrap 5 flexbox utilities in HTML
 .nav_menu {
-  background: var(--gt-white);
-  border-bottom: 1px solid var(--gt-border-color);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background: transparent;
   margin-bottom: 0;
   padding-left: 10px;
 }
@@ -518,7 +516,7 @@ body {
   position: sticky;
   top: 0;
   z-index: var(--gt-z-sticky);
-  background: var(--gt-white);
+  background: transparent;
 }
 .no-padding {
   padding: 0 !important;

@@ -1,291 +1,18 @@
-/* ── 파티클 캔버스 ── */
-#gw-particles {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.38;
-}
-
-/* ── 홈 래퍼 ── */
-.gw-home-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 70vh;
-  padding: 40px 20px;
-  position: relative;
-  z-index: 1;
-}
+/* 헤더(로고/메뉴/로그인/번역) 스타일은 전체 사이트 공통으로 _header.scss에서 관리 */
 
 /* ── 등장 애니메이션 기본 상태 ── */
 .gw-anim {
   opacity: 0;
   transform: translateY(28px);
-  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1),
-              transform 0.65s cubic-bezier(0.22,1,0.36,1);
+  transition:
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .gw-anim.visible {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* ── 인사말 ── */
-.gw-greeting {
-  font-size: 2.2rem;
-  font-weight: 700;
-  color: #1b2e22;
-  margin-bottom: 10px;
-  text-align: center;
-  letter-spacing: -0.02em;
-}
-.gw-greeting .gw-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1.1em;
-  background: #1a9e6e;
-  margin-left: 2px;
-  vertical-align: middle;
-  animation: gw-blink 1s step-end infinite;
-}
-@keyframes gw-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-/* ── 서브타이틀 ── */
-.gw-subtitle {
-  font-size: 1rem;
-  color: #73879C;
-  margin-bottom: 40px;
-  text-align: center;
-}
-
-/* ── 검색창 ── */
-.gw-search-box {
-  width: 100%;
-  max-width: 680px;
-  position: relative;
-}
-.gw-search-box input {
-  width: 100%;
-  padding: 17px 60px 17px 26px;
-  font-size: 1rem;
-  border: 2px solid #d8ebe3;
-  border-radius: 32px;
-  outline: none;
-  background: #fff;
-  transition: border-color 0.25s, box-shadow 0.25s;
-  box-shadow: 0 4px 20px rgba(26,158,110,0.08);
-}
-.gw-search-box input:focus {
-  border-color: #1a9e6e;
-  box-shadow: 0 4px 24px rgba(26,158,110,0.18);
-}
-/* idle pulse */
-@keyframes gw-pulse-ring {
-  0%   { box-shadow: 0 4px 20px rgba(26,158,110,0.08), 0 0 0 0 rgba(26,158,110,0.15); }
-  70%  { box-shadow: 0 4px 20px rgba(26,158,110,0.08), 0 0 0 10px rgba(26,158,110,0); }
-  100% { box-shadow: 0 4px 20px rgba(26,158,110,0.08), 0 0 0 0 rgba(26,158,110,0); }
-}
-.gw-search-box input.idle-pulse {
-  animation: gw-pulse-ring 2.4s ease-out infinite;
-}
-
-.gw-search-box button {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: linear-gradient(135deg, #1a9e6e 0%, #0f7a52 100%);
-  border: none;
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 14px rgba(26,158,110,0.35);
-}
-.gw-search-box button:hover {
-  transform: translateY(-50%) scale(1.08);
-  box-shadow: 0 6px 20px rgba(26,158,110,0.5);
-}
-.gw-search-box button:active { transform: translateY(-50%) scale(0.96); }
-.gw-search-box button i { color: white; font-size: 1rem; }
-
-/* ── 힌트 ── */
-.gw-search-hint {
-  margin-top: 14px;
-  color: #b0c4bc;
-  font-size: 0.82rem;
-  text-align: center;
-}
-
-/* ── 빠른 접근 칩 ── */
-.gw-quick-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 36px;
-  max-width: 600px;
-}
-.gw-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border-radius: 999px;
-  border: 1.5px solid #d8ebe3;
-  background: #fff;
-  color: #4f6358;
-  font-size: 0.84rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
-  box-shadow: 0 1px 4px rgba(26,158,110,0.06);
-}
-.gw-chip i { color: #1a9e6e; font-size: 0.9rem; }
-.gw-chip:hover {
-  background: #f0f7f3;
-  border-color: #1a9e6e;
-  color: #1a9e6e;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(26,158,110,0.14);
-}
-
-/* ── 떠다니는 배경 오브 */
-.gw-orb {
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
-  z-index: 0;
-  animation: gw-float linear infinite;
-}
-.gw-orb-1 {
-  width: 580px; height: 580px;
-  background: radial-gradient(circle at 40% 40%, rgba(26,158,110,0.52), rgba(26,158,110,0.08) 70%, transparent);
-  top: -80px; right: 4%;
-  opacity: 0.62;
-  animation-duration: 18s;
-}
-.gw-orb-2 {
-  width: 480px; height: 480px;
-  background: radial-gradient(circle at 50% 50%, rgba(52,211,153,0.46), rgba(52,211,153,0.06) 70%, transparent);
-  bottom: -50px; left: 0%;
-  opacity: 0.58;
-  animation-duration: 24s;
-  animation-delay: -8s;
-}
-.gw-orb-3 {
-  width: 320px; height: 320px;
-  background: radial-gradient(circle at 50% 50%, rgba(212,168,67,0.42), rgba(212,168,67,0.05) 70%, transparent);
-  top: 38%; right: 20%;
-  opacity: 0.52;
-  animation-duration: 20s;
-  animation-delay: -4s;
-  filter: blur(50px);
-}
-.gw-orb-4 {
-  width: 460px; height: 460px;
-  background: radial-gradient(circle at 50% 50%, rgba(130,80,255,0.30), rgba(130,80,255,0.04) 70%, transparent);
-  top: 8%; left: 22%;
-  opacity: 0.42;
-  animation-duration: 26s;
-  animation-delay: -14s;
-  filter: blur(60px);
-}
-.gw-orb-5 {
-  width: 300px; height: 300px;
-  background: radial-gradient(circle at 50% 50%, rgba(255,140,40,0.30), rgba(255,140,40,0.04) 70%, transparent);
-  bottom: 5%; right: 10%;
-  opacity: 0.38;
-  animation-duration: 22s;
-  animation-delay: -3s;
-  filter: blur(52px);
-}
-
-/* ── 오로라 밴드 ── */
-.gw-aurora {
-  position: fixed; pointer-events: none; z-index: 0;
-  width: 220%; height: 280px; left: -60%;
-  filter: blur(38px);
-  animation: gw-aurora-drift ease-in-out infinite alternate;
-}
-@keyframes gw-aurora-drift {
-  0%   { transform: translateX(-6%) translateY(0px) scaleY(1); }
-  100% { transform: translateX(6%)  translateY(28px) scaleY(1.1); }
-}
-.gw-aurora-1 {
-  background: linear-gradient(90deg, transparent 5%, rgba(26,200,140,0.20) 30%, rgba(100,80,255,0.14) 60%, transparent 95%);
-  top: 8%; opacity: 0.30;
-  animation-duration: 14s;
-}
-.gw-aurora-2 {
-  background: linear-gradient(90deg, transparent 5%, rgba(255,150,50,0.16) 35%, rgba(26,200,140,0.18) 65%, transparent 95%);
-  top: 52%; opacity: 0.22;
-  animation-duration: 18s;
-  animation-delay: -9s;
-  animation-direction: alternate-reverse;
-}
-@keyframes gw-float {
-  0%   { transform: translate(0, 0) scale(1); }
-  33%  { transform: translate(40px, -30px) scale(1.07); }
-  66%  { transform: translate(-25px, 20px) scale(0.95); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-/* ── 도트 그리드 ── */
-.gw-dot-grid {
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background-image: radial-gradient(circle, rgba(20,160,110,0.15) 1.2px, transparent 1.2px);
-  background-size: 36px 36px;
-  opacity: 0.35;
-}
-
-/* ── 데코 링 ── */
-.gw-deco-ring {
-  position: fixed; border-radius: 50%;
-  pointer-events: none; z-index: 0;
-}
-@keyframes gw-ring-cw  { to { transform: translate(-50%,-50%) rotate(360deg);  } }
-@keyframes gw-ring-ccw { to { transform: translate(-50%,-50%) rotate(-360deg); } }
-.gw-deco-ring-1 {
-  width: 680px; height: 680px;
-  top: 58%; left: 76%;
-  transform: translate(-50%,-50%);
-  border: 1px dashed rgba(26,185,130,0.15);
-  animation: gw-ring-cw 55s linear infinite;
-}
-.gw-deco-ring-2 {
-  width: 480px; height: 480px;
-  top: 68%; left: 16%;
-  transform: translate(-50%,-50%);
-  border: 1px dashed rgba(26,185,130,0.12);
-  animation: gw-ring-ccw 40s linear infinite;
-}
-.gw-deco-ring-3 {
-  width: 320px; height: 320px;
-  top: 18%; left: 54%;
-  transform: translate(-50%,-50%);
-  border: 1px solid rgba(160,100,255,0.16);
-  animation: gw-ring-cw 30s linear infinite;
-}
-.gw-deco-ring-4 {
-  width: 220px; height: 220px;
-  top: 75%; right: 8%; left: auto;
-  transform: translateY(-50%);
-  border: 1px solid rgba(255,140,40,0.18);
-  animation: gw-ring-ccw 24s linear infinite;
-  transform-origin: center;
-}
 /* ── 인덱싱 로그 패널 ── */
 .log-fab {
   display: inline-flex;
@@ -299,29 +26,58 @@
   font-weight: 500;
   cursor: pointer;
   border: none;
-  transition: background .18s, transform .15s;
-  box-shadow: 0 2px 10px rgba(26,158,110,0.35);
+  transition:
+    background 0.18s,
+    transform 0.15s;
+  box-shadow: 0 2px 10px rgba(26, 158, 110, 0.35);
 }
-.log-fab:hover { background: #0f7a52; transform: translateY(-1px); }
-.log-fab:active { transform: scale(.97); }
+.log-fab:hover {
+  background: #0f7a52;
+  transform: translateY(-1px);
+}
+.log-fab:active {
+  transform: scale(0.97);
+}
 .fab-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #fff; opacity: .85; display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.85;
+  display: inline-block;
 }
-.fab-dot.running { background: #6effc5; animation: dot-pulse 1.2s ease-in-out infinite; }
+.fab-dot.running {
+  background: #6effc5;
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
 @keyframes dot-pulse {
-  0%,100% { opacity:.85; transform:scale(1); }
-  50%      { opacity:1;   transform:scale(1.35); }
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
 }
 .fab-badge {
-  position: absolute; top: -5px; right: -5px;
-  background: #e24b4a; color: #fff;
-  font-size: 10px; font-weight: 500;
-  border-radius: 999px; padding: 1px 5px;
-  min-width: 16px; text-align: center;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #e24b4a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 1px 5px;
+  min-width: 16px;
+  text-align: center;
   display: none;
 }
-.fab-badge.show { display: block; }
+.fab-badge.show {
+  display: block;
+}
 
 .panel-wrap {
   position: absolute;
@@ -333,75 +89,146 @@
   overflow: hidden;
   background: #fff;
   z-index: 9999;
-  box-shadow: 0 8px 32px rgba(26,158,110,0.12);
-  max-height: 0; opacity: 0;
+  box-shadow: 0 8px 32px rgba(26, 158, 110, 0.12);
+  max-height: 0;
+  opacity: 0;
   pointer-events: none;
-  transition: max-height .35s cubic-bezier(.22,1,.36,1), opacity .3s;
+  transition:
+    max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s;
   max-width: calc(100vw - 24px);
 }
-.panel-wrap.open { max-height: 480px; opacity: 1; pointer-events: all; }
+.panel-wrap.open {
+  max-height: 480px;
+  opacity: 1;
+  pointer-events: all;
+}
 
 .panel-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 14px;
   background: #f0f7f3;
   border-bottom: 1px solid #d8ebe3;
 }
 .panel-title {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 13px; font-weight: 500; color: #1b2e22;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1b2e22;
 }
 .panel-status {
-  font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 500;
-  background: rgba(26,158,110,0.12); color: #1a9e6e;
-  display: flex; align-items: center; gap: 5px;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 500;
+  background: rgba(26, 158, 110, 0.12);
+  color: #1a9e6e;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
-.panel-status.idle    { background: #f4f4f4; color: #888; }
-.panel-status.done    { background: #eaf3de; color: #3b6d11; }
-.panel-status.failed  { background: #fcebeb; color: #a32d2d; }
+.panel-status.idle {
+  background: #f4f4f4;
+  color: #888;
+}
+.panel-status.done {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+.panel-status.failed {
+  background: #fcebeb;
+  color: #a32d2d;
+}
 .status-indicator {
-  width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
 }
-.status-indicator.running { animation: dot-pulse 1.1s ease-in-out infinite; }
+.status-indicator.running {
+  animation: dot-pulse 1.1s ease-in-out infinite;
+}
 
-.panel-actions { display: flex; gap: 6px; }
+.panel-actions {
+  display: flex;
+  gap: 6px;
+}
 .panel-btn {
-  background: none; border: 1px solid #d8ebe3;
-  color: #1a9e6e; border-radius: 6px; padding: 3px 9px;
-  font-size: 11px; cursor: pointer; transition: background .15s;
+  background: none;
+  border: 1px solid #d8ebe3;
+  color: #1a9e6e;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-.panel-btn:hover { background: rgba(26,158,110,0.08); }
+.panel-btn:hover {
+  background: rgba(26, 158, 110, 0.08);
+}
 
-.progress-bar-wrap { height: 3px; background: #d8ebe3; }
+.progress-bar-wrap {
+  height: 3px;
+  background: #d8ebe3;
+}
 .progress-bar-fill {
-  height: 100%; background: linear-gradient(90deg, #1a9e6e, #34d399);
-  width: 0%; transition: width .5s ease; border-radius: 0 2px 2px 0;
+  height: 100%;
+  background: linear-gradient(90deg, #1a9e6e, #34d399);
+  width: 0%;
+  transition: width 0.5s ease;
+  border-radius: 0 2px 2px 0;
 }
 
 .log-body {
-  height: 260px; overflow-y: auto;
+  height: 260px;
+  overflow-y: auto;
   padding: 10px 14px;
-  /* font-family: monospace;  ← 이 줄 삭제 */
-  font-size: 12px; line-height: 1.7;
-  scrollbar-width: thin; scrollbar-color: #d8ebe3 transparent;
+  font-size: 12px;
+  line-height: 1.7;
+  scrollbar-width: thin;
+  scrollbar-color: #d8ebe3 transparent;
 }
-.log-body::-webkit-scrollbar { width: 4px; }
-.log-body::-webkit-scrollbar-thumb { background: #d8ebe3; border-radius: 4px; }
+.log-body::-webkit-scrollbar {
+  width: 4px;
+}
+.log-body::-webkit-scrollbar-thumb {
+  background: #d8ebe3;
+  border-radius: 4px;
+}
 
 .log-line {
-  display: flex; gap: 6px; align-items: flex-start;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
   padding: 2px 0;
-  animation: line-in .2s ease;
+  animation: line-in 0.2s ease;
   min-width: 0;
   width: 100%;
   white-space: pre-wrap;
   word-break: break-all;
 }
 @keyframes line-in {
-  from { opacity:0; transform:translateY(4px); }
-  to   { opacity:1; transform:none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
-.log-ts   { color: #b0c4bc; flex-shrink: 0; font-size: 11px; padding-top: 1px; min-width: 0;}
+.log-ts {
+  color: #b0c4bc;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding-top: 1px;
+  min-width: 0;
+}
 .log-tag {
   flex-shrink: 0;
   font-size: 10px;
@@ -415,107 +242,305 @@
   overflow: visible;
   height: auto;
 }
-.log-tag.running  { background: #e1f5ee; color: #0f6e56; }
-.log-tag.done     { background: #eaf3de; color: #3b6d11; }
-.log-tag.failed   { background: #fcebeb; color: #a32d2d; }
-.log-msg  { color: #333; word-break: break-word; min-width: 0; overflow-wrap: anywhere;}
-.log-pct  { color: #1a9e6e; font-weight: 500; margin-left: 4px; }
+.log-tag.running {
+  background: #e1f5ee;
+  color: #0f6e56;
+}
+.log-tag.done {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+.log-tag.failed {
+  background: #fcebeb;
+  color: #a32d2d;
+}
+.log-msg {
+  color: #333;
+  word-break: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.log-pct {
+  color: #1a9e6e;
+  font-weight: 500;
+  margin-left: 4px;
+}
 
 .log-empty {
-  height: 100%; display: flex; align-items: center; justify-content: center;
-  color: #aaa; font-size: 12px; font-family: sans-serif;
-  flex-direction: column; gap: 6px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 12px;
+  font-family: sans-serif;
+  flex-direction: column;
+  gap: 6px;
 }
-.log-empty svg { opacity: .35; }
+.log-empty svg {
+  opacity: 0.35;
+}
 
 .panel-footer {
-  padding: 8px 14px; border-top: 1px solid #d8ebe3;
-  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid #d8ebe3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: #f9fcfb;
 }
-.footer-count { font-size: 11px; color: #888; }
+.footer-count {
+  font-size: 11px;
+  color: #888;
+}
 .footer-scroll-btn {
-  font-size: 11px; color: #1a9e6e; cursor: pointer;
-  background: none; border: none; display: flex; align-items: center; gap: 4px;
+  font-size: 11px;
+  color: #1a9e6e;
+  cursor: pointer;
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-.footer-scroll-btn:hover { text-decoration: underline; }
-
-footer { display: none !important; }
-.right_col {
-  padding: 0 !important; overflow: hidden !important;
-  background:
-    radial-gradient(ellipse at 10% 15%, rgba(26,210,140,0.10) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 10%, rgba(120,80,255,0.07) 0%, transparent 40%),
-    linear-gradient(145deg, #d8f0e6 0%, #e8eeff 50%, #f0ecff 100%) !important;
+.footer-scroll-btn:hover {
+  text-decoration: underline;
 }
-body, html { overflow: hidden; }
 
-/* ══ Knowledge Graph Home — Glass Pill ══ */
-.gw-home-v2 {
-  position: relative; z-index: 1;
-  display: flex; flex-direction: column; align-items: center;
-  height: calc(100vh - 58px);
-  padding-top: 22px; overflow: hidden;
+// custom.scss가 footer{display:block}을 먼저 정의하지만, 이 파일(home.scss)이
+// 캐스케이드상 더 나중에 로드돼서 동일 명시도(태그 셀렉터)로도 알아서 이김 → !important 불필요
+footer {
+  display: none;
 }
-.gw-home-v2 .gw-greeting { font-size: 2.4rem; margin-bottom: 10px; font-weight: 800; letter-spacing: -0.03em; color: #0a3a24; }
-.gw-home-v2 .gw-subtitle { margin-bottom: 72px; font-size: 0.88rem; color: #7aaa96; letter-spacing: 0.08em; text-transform: uppercase; background: none; padding: 0; border-radius: 0; border: none; display: block; }
+// _green-luxury.scss의 ".right_col{padding:24px!important;background:var(--gt-body-bg)!important}"
+// 를 이겨야 해서 !important 필요 (히어로를 화면 꽉 채운 사진으로 보여줘야 하므로 패딩 0, 스크롤 숨김)
+.page-index .right_col {
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #efeae0 !important; /* hero-bg 이미지 로딩 전 대체 색상 */
+}
+body,
+html {
+  overflow: hidden;
+}
 
-.gw-kgraph {
+/* ══ Intelligence Orbit — 홈 히어로 (레이어드 이미지 에셋 합성) ══ */
+.gw-orbit-hero {
   position: relative;
-  width: min(960px, 97vw);
-  height: min(580px, 70vw);
-  min-height: 460px;
-}
-#kg-svg {
-  position: absolute; top: 0; left: 0;
-  width: 100%; height: 100%;
-  pointer-events: none; overflow: visible;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  height: 100vh;
+  padding: 124px 6vw 0;
+  overflow: hidden;
 }
 
-.gw-knode {
+/* 풀블리드 배경 — hero-bg 사진 한 장에 구체·궤도링·스파클·글로우가 전부 합성되어 있음 */
+.gw-layer {
   position: absolute;
-  text-decoration: none !important; z-index: 2;
-  transform: translate(-50%, -50%); cursor: pointer;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
 }
 
-/* Frosted glass circle — unified green */
-.gw-knode-blob {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px;
-  width: 184px; height: 184px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.64);
-  backdrop-filter: blur(28px) saturate(2.0);
-  -webkit-backdrop-filter: blur(28px) saturate(2.0);
-  border: 2.5px solid rgba(38,185,154,0.90);
-  color: #084a37;
-  box-shadow:
-    0 10px 48px rgba(38,185,154,0.42),
-    0 0 0 10px rgba(38,185,154,0.07),
-    inset 0 2px 0 rgba(255,255,255,0.98),
-    inset 0 -1px 0 rgba(38,185,154,0.12);
-  font-size: 1.12rem; font-weight: 700;
+.gw-orbit-left {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  max-width: 800px;
+}
+.gw-hero-eyebrow {
+  margin: 0 0 14px;
+  font-family:
+    "Geist",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fcfbfb; // Ivory Glow
   letter-spacing: 0.04em;
-  transition: transform 0.38s cubic-bezier(0.22,1,0.36,1),
-              box-shadow 0.38s, background 0.38s;
+  text-align: left;
 }
-.gw-knode-icon { font-size: 2.8rem; line-height: 1; color: #1a9e82; transition: transform 0.38s; }
-.gw-knode:hover .gw-knode-blob {
-  transform: translateY(-12px) scale(1.10);
-  background: rgba(196,252,232,0.86);
-  box-shadow:
-    0 28px 72px rgba(38,185,154,0.58),
-    0 0 0 16px rgba(38,185,154,0.10),
-    inset 0 2px 0 rgba(255,255,255,1.0),
-    inset 0 -1px 0 rgba(38,185,154,0.15);
+.gw-hero-headline {
+  // custom.scss의 "body .right_col h1:not([class*=display-])" 전역 규칙이
+  // margin/font-weight/font-size/line-height를 40px 고정으로 눌러버려서 그 4개만 !important로 이김.
+  // font-family/color는 그 전역 규칙이 애초에 안 건드리는 속성이라 !important 불필요.
+  margin: 0 0 24px !important;
+  font-family: "Fraunces", "Playfair Display", Georgia, serif;
+  font-style: normal;
+  font-weight: 400 !important;
+  font-optical-sizing: auto; // 큰 헤드라인 크기에 맞는 opsz 모양을 브라우저가 자동으로 선택
+  font-variation-settings:
+    "SOFT" 0,
+    "WONK" 0; // f/a/g 등 quirky한 대체 글자 모양 끄고 얌전한 형태로
+  font-size: clamp(2.9rem, 5.5vw, 5.8rem) !important;
+  line-height: 1.28 !important;
+  letter-spacing: normal;
+  color: #374132;
+  text-align: left;
+  white-space: nowrap; // <br>로 준 줄바꿈 외에는 자동 줄바꿈 안 되도록
 }
-.gw-knode:hover .gw-knode-icon { transform: scale(1.22); color: #0f7a60; }
+.gw-hero-headline-muted {
+  color: #57726b; // 위 두 줄(#374132)이랑 폰트/굵기는 동일, 색만 더 옅은 올리브 톤
+}
+// shadcnspace "illuminated-hero" 데모의 SVG 글로우 필터(#glow-4, HeroOrbit.jsx에 정의)를
+// 헤드라인 텍스트에 적용. 필터 자체가 이미 따뜻한 골드/앰버 톤이라 사이트 색감이랑 잘 맞음 —
+// 글자 색은 그대로 두고 필터만 얹어서 은은한 광채가 도는 느낌만 빌려옴.
+.gw-hero-headline-glow {
+  // 글자 자체를 밝은 톤으로 바꿔야 필터의 광채가 실제로 "빛나는" 느낌으로 보임
+  // (원래 진한 올리브색 그대로면 글로우가 그냥 흐릿한 그림자처럼만 보임)
+  color: #fbf0d9 !important;
+  filter: url(#glow-4);
+}
+.gw-hero-desc {
+  margin: 0 0 28px;
+  max-width: 540px;
+  font-family:
+    "Geist",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: #fcfbfb; // Ivory Glow
+  text-align: left;
+}
 
-@keyframes kf0{0%,100%{transform:translate(-50%,calc(-50% + 0px))}50%{transform:translate(-50%,calc(-50% - 16px))}}
-@keyframes kf1{0%,100%{transform:translate(-50%,calc(-50% + 0px))}50%{transform:translate(-50%,calc(-50% - 20px))}}
-@keyframes kf2{0%,100%{transform:translate(-50%,calc(-50% + 0px))}50%{transform:translate(-50%,calc(-50% - 14px))}}
-@keyframes kf3{0%,100%{transform:translate(-50%,calc(-50% + 0px))}50%{transform:translate(-50%,calc(-50% - 18px))}}
-#kn-search       { animation: kf0 3.8s ease-in-out infinite; }
-#kn-mylife       { animation: kf1 4.2s ease-in-out infinite 0.7s; }
-#kn-imap-collect { animation: kf2 3.5s ease-in-out infinite 1.4s; }
-#kn-graph-viz    { animation: kf3 4.0s ease-in-out infinite 1.0s; }
+.gw-hero-cta {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+// 이 두 CTA는 <a> 태그라 _green-luxury.scss의 전역
+// "a { color: var(--gt-link-color) !important; text-decoration: none !important; }"
+// 를 이겨야 해서 color/text-decoration에 !important 필요. 같은 이유로 그 파일의
+// "a:hover { color: var(--gt-link-hover) !important; }"(태그+가상클래스라 명시도가 더 높음)가
+// hover 시에도 이겨버려서 마우스를 올리면 글자색이 초록으로 튀는 버그가 있었음 →
+// 각 CTA에 :hover 전용 규칙을 명시도(클래스+가상클래스)로 추가해서 고정.
+.gw-hero-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 26px;
+  border-radius: 999px;
+  background: #e9edf2; // Soft Mist
+  color: #2a2f35 !important; // 배경이 밝아져서 글자는 흰색 대신 어두운 톤으로 (안 그러면 안 보임)
+  font-family:
+    "Geist",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none !important;
+  box-shadow: 0 8px 20px rgba(51, 63, 43, 0.28);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.gw-hero-cta-primary:hover {
+  color: #2a2f35 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(51, 63, 43, 0.36);
+}
+.gw-hero-cta-secondary {
+  font-family:
+    "Geist",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #e8c28a !important; // Warm Gold
+  text-decoration: none !important;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+.gw-hero-cta-secondary:hover {
+  color: #e8c28a !important;
+  border-color: #e8c28a;
+}
+
+/* ── 하단 "지원 메일 서비스" 영역 ── */
+.gw-trusted {
+  position: absolute;
+  left: 50%;
+  bottom: 5%;
+  transform: translateX(-50%);
+  z-index: 4;
+  text-align: center;
+}
+// .gw-anim.visible { transform: translateY(0) } 이 클래스 2개짜리 규칙이
+// .gw-trusted 클래스 1개짜리 규칙보다 명시도가 높아서 translateX(-50%)를 통째로
+// 덮어써버림(transform은 속성 하나라 나중에 이긴 규칙이 전부 가져감, 합쳐지지 않음) →
+// 그래서 중앙정렬이 무시되고 있었음. .gw-trusted 쪽에서 두 transform을 합쳐서 명시도를 이김.
+.gw-trusted.gw-anim {
+  transform: translateX(-50%) translateY(28px);
+}
+.gw-trusted.gw-anim.visible {
+  transform: translateX(-50%) translateY(0);
+}
+.gw-trusted-label {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  color: #fff6e1; // Ivory Glow
+  letter-spacing: 0.06em;
+}
+.gw-trusted-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+}
+.gw-trusted-logo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff6e1; // Ivory Glow
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+
+/* ── 궤도 노드 앵커 — 배경 사진 속 구체/링 위치에 맞춰 4개 메뉴를 배치하는 투명 컨테이너 ── */
+.gw-orbit-right {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .gw-orbit-hero {
+    flex-direction: column;
+    justify-content: center;
+    gap: 26px;
+    padding: 124px 20px 0;
+    height: auto;
+    min-height: 100vh;
+  }
+  .gw-orbit-left {
+    max-width: 100%;
+    text-align: center;
+  }
+  .gw-hero-eyebrow,
+  .gw-hero-headline,
+  .gw-hero-desc {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .gw-hero-cta {
+    justify-content: center;
+  }
+  .gw-trusted {
+    position: static;
+    transform: none;
+    margin-top: 20px;
+  }
+}

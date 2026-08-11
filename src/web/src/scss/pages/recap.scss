@@ -236,49 +236,6 @@
   opacity: 0.7;
 }
 
-/* ── 친밀도 링 ── */
-.rc-af-ring-wrap {
-  position: relative; flex-shrink: 0;
-  width: 52px; height: 52px;
-}
-.rc-af-ring-wrap svg { width: 52px; height: 52px; }
-.rc-af-ring-bg {
-  fill: none; stroke: #f0f0f4; stroke-width: 5;
-}
-.rc-af-ring-fill {
-  fill: none; stroke-width: 5;
-  stroke-linecap: round;
-  transform: rotate(-90deg); transform-origin: 50% 50%;
-  transition: stroke-dashoffset 1.1s cubic-bezier(0.22,1,0.36,1);
-}
-.rc-af-ring-pct {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.62rem; font-weight: 800; color: #2d3748;
-  line-height: 1;
-}
-.rc-af-info { flex: 1; min-width: 0; }
-.rc-af-name {
-  font-size: 0.88rem; font-weight: 800; color: #1a2a3a;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 5px;
-}
-.rc-af-track {
-  height: 7px; border-radius: 20px; background: #f0f0f4; overflow: hidden;
-}
-.rc-af-fill {
-  height: 100%; border-radius: 20px; width: 0;
-  transition: width 1.1s cubic-bezier(0.22,1,0.36,1);
-}
-.rc-af-email {
-  font-size: 0.7rem; color: #aab0bc; margin-top: 4px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.rc-af-score {
-  font-size: 0.78rem; font-weight: 800; flex-shrink: 0;
-  text-align: right; min-width: 34px;
-}
-
 /* ── 친밀도 도넛 차트 ── */
 .rc-af-donut-wrap {
   display: flex;

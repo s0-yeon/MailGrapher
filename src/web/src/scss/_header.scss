@@ -2,28 +2,104 @@
 // 기존에 페이지마다 미세하게 다르게 복붙되어 있던 .gw-top-links 관련 규칙을 한 곳으로 통합.
 
 // 사이드바가 사라졌으므로 top_nav/right_col의 사이드바 오프셋을 항상 0으로 고정
+// 상단바는 전체 사이트 공통으로 완전 투명 + 고정(fixed) — 각 페이지 배경이 그대로 비침
 .top_nav {
-  margin-left: 0 !important;
+  position: fixed;
+  top: 12px;
   left: 0;
+  right: 0;
+  z-index: 100;
+  margin-left: 0 !important; // 사이드바 제거 후에도 남아있는 다른 반응형 규칙(margin-left:70/230px)을 이기기 위함
+  background: transparent;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+
+  .nav_menu {
+    background: transparent;
+  }
 }
 .right_col {
-  margin-left: 0 !important;
+  margin-left: 0 !important; // 사이드바 제거 후에도 남아있는 다른 반응형 규칙을 이기기 위함
+  padding-top: 136px !important; // 고정 헤더(100px) + 상단 여백(12px) + 여백 24px — 다른 padding 규칙(24px)보다 top만 더 필요해서 !important
+}
+
+.gw-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 32px;
+  flex-shrink: 0;
+  text-decoration: none !important; // Bootstrap 링크 밑줄 무력화
+}
+.gw-brand-logo-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.gw-brand-logo-text {
+  font-family: "Fraunces", "Playfair Display", Georgia, serif;
+  font-weight: 400;
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 0,
+    "WONK" 0; // f/a/g 등 quirky한 대체 글자 모양 끄고 얌전한 형태로 (home.scss 헤드라인과 동일 이유)
+  font-size: 1.3rem;
+  color: #f9ffff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.gw-login-btn {
+  background: none;
+  border: 1px solid rgba(248, 246, 241, 0.5);
+  color: #f8f6f1;
+  font-size: 0.86rem;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #f8f6f1;
+  }
 }
 
 .gw-top-links {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-left: 16px;
+  gap: 6px;
 }
 .gw-tl {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: #73879c;
+  padding: 10px 18px;
+  border-radius: 8px;
+  // Fraunces/Playfair Display/Georgia는 한글 글리프가 없어서 "홈/검색/메일 수집/지식 그래프" 같은
+  // 한글 라벨은 이미 다음 폴백으로 넘어가고 있었음. 원래 마지막이 "serif"라 시스템 명조체로
+  // 떨어졌는데, 본문 설명(.gw-hero-desc)이랑 톤을 맞추려고 그 폰트 스택("Geist"/"Inter"/
+  // -apple-system/sans-serif)을 그대로 이어붙임 — 영문("My Life")은 여전히 Fraunces부터 시도하고,
+  // 한글은 -apple-system/sans-serif 폴백(시스템 고딕체)으로 떨어져서 설명 문단이랑 통일된 느낌.
+  font-family:
+    "Fraunces",
+    "Geist",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "SOFT" 0,
+    "WONK" 0;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  // _green-luxury.scss의 전역 `a { color: var(--gt-link-color) !important }`가
+  // 사이트 전체 링크를 초록색으로 강제하므로, 이를 이기기 위해 !important 필요
+  color: #ffffff !important;
   text-decoration: none;
   border: none;
   background: transparent;
@@ -32,19 +108,36 @@
     background 0.15s,
     color 0.15s;
   white-space: nowrap;
-  font-family: inherit;
   line-height: 1.4;
 
   &:hover {
-    background: #f4f6f8;
-    color: #2a3f54;
+    background: rgba(255, 255, 255, 0.28);
+    color: #737373 !important;
     text-decoration: none;
   }
   &.active {
-    color: #26b99a;
+    color: #737373 !important;
     font-weight: 700;
-    background: #e8f7f4;
+    background: rgba(255, 255, 255, 0.4);
   }
+}
+
+// #langDropdown은 예전 vanilla JS 헤더 시절 id라서 지금 React 버전(Header.jsx)엔
+// 존재하지 않음 — 그래서 번역 아이콘이 이 규칙을 못 받고 _green-luxury.scss의
+// 전역 링크 초록색으로 새고 있었음. 실제 클래스(.gw-lang-trigger)로 교체.
+.gw-lang-trigger,
+.gw-lang-trigger i,
+#current-lang {
+  color: #ffffff !important;
+}
+
+/* '매일 분석 현황' FAB — indexingStatus.js가 런타임에 주입하는 초록 스타일을 올리브 톤으로 강제 교체 */
+.log-fab {
+  background: linear-gradient(150deg, #4a5a3d 0%, #333f2b 100%) !important;
+  box-shadow: 0 8px 20px rgba(51, 63, 43, 0.28) !important;
+}
+.log-fab:hover {
+  background: linear-gradient(150deg, #566a47 0%, #3d4a35 100%) !important;
 }
 
 @media (max-width: 900px) {

@@ -14,10 +14,9 @@ import './js/init.js';
 import './utils/i18n.js';
 
 import { renderHeader, renderFooter } from './layout/appHeader.js';
-import { mountIndexingStatus } from './features/indexingStatus.js';
 
 /**
- * Mounts the shared header/footer/indexing-status widget for a page.
+ * Mounts the shared header/footer for a page.
  * Call once at the top of each page's own entry module (src/pages/<name>.js)
  * with the page's key (matches NAV_ITEMS in appHeader.js), then run the
  * page-specific logic that follows.
@@ -25,5 +24,4 @@ import { mountIndexingStatus } from './features/indexingStatus.js';
 export function bootstrapApp(activePage) {
   renderHeader(activePage);
   renderFooter();
-  mountIndexingStatus();
 }

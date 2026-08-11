@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; frame-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+    <title>My Life | MailGrapher</title>
+    <script type="module" src="/src/pages/mylife.js"></script>
+  </head>
+
+  <body class="page-mylife">
+    <div class="container body">
+      <div class="main_container">
+
+        <div id="app-header"></div>
+
+        <main class="right_col" role="main">
+          <div class="ml-page">
+
+            <div class="ml-header">
+              <div class="ml-title">My <span>Life</span></div>
+              <div class="ml-sub">나의 관계와 시간을 한눈에</div>
+            </div>
+
+            <div class="ml-grid">
+
+              <a href="mypeople.html" class="ml-card">
+                <div class="ml-card-icon">👥</div>
+                <div class="ml-card-title">My <span>People</span></div>
+                <div class="ml-card-desc">
+                  메일을 통해 연결된 사람들을 시각화합니다.<br>
+                  누구와 자주 소통하는지, 관계망이 어떻게 형성되어 있는지 확인해보세요.
+                </div>
+                <div class="ml-card-arrow">바로가기 →</div>
+              </a>
+
+              <!-- My Time -->
+              <a href="mytime.html" class="ml-card">
+                <div class="ml-card-icon">🕰️</div>
+                <div class="ml-card-title">My <span>Time</span></div>
+                <div class="ml-card-desc">
+                  시간 흐름에 따른 이메일 활동을 타임라인으로 돌아봅니다.<br>
+                  월별과 연별로 어떤 주제가 중심이었는지 살펴보세요.
+                </div>
+                <div class="ml-card-arrow">바로가기 →</div>
+              </a>
+
+              <!-- Recap -->
+              <a href="recap.html" class="ml-card">
+                <div class="ml-card-icon">📋</div>
+                <div class="ml-card-title"><span>Recap</span></div>
+                <div class="ml-card-desc">
+                  지난 기간의 메일 활동을 요약해서 돌아봅니다.<br>
+                  놓친 흐름은 없었는지, 핵심만 빠르게 확인해보세요.
+                </div>
+                <div class="ml-card-arrow">바로가기 →</div>
+              </a>
+
+            </div>
+          </div>
+        </main>
+        <footer id="app-footer"></footer>
+      </div>
+    </div>
+  </body>
+</html>
