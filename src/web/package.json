@@ -1,8 +1,8 @@
 {
-  "name": "mailgrapher-web",
+  "name": "Social Visualizer-web",
   "version": "0.1.0",
   "type": "module",
-  "description": "MailGrapher web frontend",
+  "description": "Social Visualizer web frontend",
   "scripts": {
     "dev": "vite --clearScreen false",
     "build": "cross-env NODE_ENV=production vite build",
