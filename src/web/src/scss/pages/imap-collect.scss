@@ -52,7 +52,6 @@
 }
 .gw-form-grid.cols-3 { grid-template-columns: 2fr 1fr 1fr; }
 .gw-form-group { display: flex; flex-direction: column; gap: 5px; }
-.gw-form-group.full { grid-column: 1 / -1; }
 
 .gw-label {
   font-size: 0.8rem;
