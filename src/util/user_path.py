@@ -84,6 +84,11 @@ def list_accounts(base_dir: str) -> list[dict]:
             dir_path = os.path.join(user_data_dir, dir_name)
             if not os.path.isdir(dir_path):
                 continue
+            # "base"(이메일) 도메인 데이터가 실제로 있는 폴더만 계정으로 인정.
+            # 카카오톡 전용 폴더({room}/kakao/만 있고 {room}/base/는 없음)가 이메일 계정 셀렉터에
+            # "인덱싱 중" 유령 계정으로 뜨는 걸 방지함.
+            if not os.path.isdir(os.path.join(dir_path, "base")):
+                continue
 
             meta_path = os.path.join(dir_path, ACCOUNT_META_FILENAME)
             user_id = None

@@ -318,9 +318,9 @@ def upload():
     user_id = (data.get("user_id") or "").strip().lower()
     is_last = data.get("is_last", True)
     batch_offset = data.get("batch_offset", 0)
+    domain = (data.get("domain") or "base").strip().lower()
 
-    # TODO: 실제 domain 선택 로직이 생기면 "base" 리터럴을 그 값으로 교체
-    paths = UserPaths(BASE_DIR, user_id, "base")
+    paths = UserPaths(BASE_DIR, user_id, domain)
 
     if not str(content).strip():
         return jsonify({"ok": False, "error": "content가 비어있습니다."}), 400
