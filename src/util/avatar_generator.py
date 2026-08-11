@@ -2,7 +2,6 @@ import os
 import io
 import re
 import json
-import base64
 import hashlib
 import threading
 import requests
@@ -18,11 +17,42 @@ load_dotenv("src/parquet/.env")
 
 client = OpenAI(api_key=os.getenv("GRAPHRAG_API_KEY"))
 
-AVATAR_MODEL = "gpt-image-1"
-AVATAR_SIZE = "1024x1024"
-AVATAR_QUALITY = "low"
+# 성별/발신자(기업) 판별은 그대로 OpenAI(gpt-4o-mini) 텍스트 모델을 사용하고,
+# 아바타 이미지 생성만 로컬 FLUX.1-schnell로 처리한다.
+FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell"
+AVATAR_SIZE = 512
+AVATAR_STEPS = 4
+AVATAR_GUIDANCE_SCALE = 0.0
 
 _map_lock = threading.Lock()
+
+# 로컬 FLUX 파이프라인은 로드 비용이 크고(모델 다운로드 + 초기화) 동시에 여러 스레드가
+# 추론을 돌리면 CPU 오프로드 메모리 관리가 꼬일 수 있어, 프로세스당 인스턴스 하나를
+# 지연 로딩해 재사용하고 추론 자체는 락으로 직렬화한다.
+_pipe_lock = threading.Lock()
+_pipe = None
+
+
+def _get_pipeline():
+    global _pipe
+    if _pipe is not None:
+        return _pipe
+    with _pipe_lock:
+        if _pipe is None:
+            import torch
+            from diffusers import FluxPipeline
+
+            pipe = FluxPipeline.from_pretrained(
+                FLUX_MODEL_ID,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+                token=os.getenv("HF_TOKEN") or None,
+            )
+            pipe.enable_sequential_cpu_offload()
+            pipe.vae.enable_slicing()
+            pipe.vae.enable_tiling()
+            _pipe = pipe
+    return _pipe
 
 
 def _avatar_filename(email: str) -> str:
@@ -338,13 +368,38 @@ def _fetch_company_logo(domain: str) -> bytes | None:
     return None
 
 
+def _translate_hint_to_english(hint: str) -> str:
+    """FLUX의 CLIP/T5 텍스트 인코더는 영어 위주로 학습돼 한국어 vocab이 빈약해서,
+    한국어 relationship_hint를 그대로 넣으면 토큰이 <unk>로 깨진다. 프롬프트에 넣기 전에
+    짧은 영어 한 문장으로 번역해 넣는다. 실패 시 빈 문자열을 반환해 힌트를 생략한다."""
+    try:
+        result = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "다음 한 줄짜리 관계 설명을 이미지 생성 프롬프트에 넣을 수 있도록 "
+                                "간결한 영어 한 문장으로 번역하세요. 번역 결과 외의 다른 말은 절대 하지 마세요.",
+                },
+                {"role": "user", "content": hint},
+            ],
+            temperature=0,
+        )
+        return (result.choices[0].message.content or "").strip()
+    except Exception as e:
+        print(f"[AVATAR] 관계 힌트 번역 실패: {e}")
+        return ""
+
+
 def _build_avatar_prompt(name: str, relationship_hint: str = "", seed_key: str = "") -> str:
     context_block = ""
     if relationship_hint:
-        context_block = f"""
+        translated_hint = _translate_hint_to_english(relationship_hint[:200])
+        if translated_hint:
+            context_block = f"""
 
 [Persona context — style inspiration only, never literal]
-A short note about this person's relationship to the user: "{relationship_hint[:200]}"
+A short note about this person's relationship to the user: "{translated_hint}"
 Use this ONLY as soft inspiration for clothing style and mood (e.g. business-casual for a colleague, relaxed casual for a friend/family member). Never depict any text, objects, logos, or literal scenes from this note."""
 
     attrs = _pick_style_attributes(seed_key or name)
@@ -364,7 +419,7 @@ A single friendly portrait of one person whose given name is "{name}". {gender_l
 - Hair: {attrs['hair_color']}, styled {attrs['hair_style']}.
 - Accessory: {attrs['accessory']}.
 - Clothing: a flat, solid {attrs['clothing_color']} top.
-- Background: this image is generated with a fully transparent background — render ONLY the person, with no background art, no vignette, no glow, no shape, no color fill of any kind behind them. A flat solid color will be composited behind the cutout programmatically afterward.
+- Background: a fully flat, solid {attrs['bg_name']} background (hex {attrs['bg_hex']}), completely uniform with no gradient, no vignette, no texture, no shape, no glow — filling the entire canvas edge-to-edge behind the person.
 
 [Art direction]
 - Flat vector illustration, modern corporate-avatar style: clean geometric shapes, confident outlines of uniform stroke width. No gradients, no soft shading, no drop shadows, no textures, no glossy highlights anywhere in the image.
@@ -380,72 +435,25 @@ A single friendly portrait of one person whose given name is "{name}". {gender_l
 - No text, no logos, no watermarks, no signatures, no UI chrome, no photorealism, no 3D rendering, no anime style.""".strip()
 
 
-def _ensure_margins(subject: Image.Image, min_top: float = 0.06, min_side: float = 0.04) -> Image.Image:
-    """
-    모든 아바타가 같은 구도를 갖도록 항상 동일한 규칙으로 재배치한다:
-    머리 위쪽과 좌우는 여백을 보장하고(귀/머리카락이 잘리지 않게), 어깨·옷은
-    의도적으로 캔버스 맨 아래까지 여백 없이 꽉 채운다(표준 프로필 아이콘 스타일).
-    모델이 매번 다른 구도로 그려도 결과 레이아웃은 모든 사람에게 동일하게 보장된다.
-    """
-    w, h = subject.size
-    alpha = subject.split()[-1]
-    # 안티에일리어싱으로 생긴 흐릿한 알파 언저리는 실제로 눈에 보이지 않으므로
-    # bbox 기준에서 제외한다 — 그 언저리까지 "내용물"로 잡으면 실제 옷/몸이
-    # 바닥까지 채워지지 못하고 그 아래로 배경색 여백이 보이게 된다.
-    solid_alpha = alpha.point(lambda a: 255 if a >= 128 else 0)
-    bbox = solid_alpha.getbbox()
-    if not bbox:
-        return subject
-    left, top, right, bottom = bbox
-    content_w, content_h = right - left, bottom - top
-    if content_w <= 0 or content_h <= 0:
-        return subject
-
-    scale = (h * (1 - min_top)) / content_h
-    max_w = w * (1 - 2 * min_side)
-    if content_w * scale > max_w:
-        scale = max_w / content_w
-
-    cropped = subject.crop(bbox)
-    new_w, new_h = max(1, round(content_w * scale)), max(1, round(content_h * scale))
-    cropped = cropped.resize((new_w, new_h), Image.LANCZOS)
-
-    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    canvas.paste(cropped, ((w - new_w) // 2, h - new_h), cropped)
-    return canvas
-
-
-def _composite_on_color(image_bytes: bytes, bg_rgb: tuple) -> bytes:
-    """
-    gpt-image-1을 background="transparent"로 호출해 받은, 인물만 있고 배경은 진짜
-    알파 채널로 투명한 PNG를 우리가 정한 단색 배경 위에 합성한다. 색 차이로 배경을
-    "추측"하지 않고 API가 제공하는 진짜 투명도를 쓰기 때문에, 머리카락이 배경과
-    비슷한 색이어도(예: 검은 머리 + 어두운 배경) 안전하게 분리된다.
-    """
-    subject = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    subject = _ensure_margins(subject)
-    solid_bg = Image.new("RGBA", subject.size, bg_rgb + (255,))
-    result = Image.alpha_composite(solid_bg, subject).convert("RGB")
+def generate_avatar_image_bytes(name: str, relationship_hint: str = "", seed_key: str = "") -> bytes:
+    """로컬 FLUX.1-schnell 파이프라인으로 아바타를 생성한다.
+    diffusers의 기본 FluxPipeline은 gpt-image-1과 달리 진짜 알파 채널 투명 배경을
+    낼 수 없으므로, 배경색은 후처리 합성이 아니라 프롬프트에 직접 지정해 모델이
+    바로 단색 배경 위에 그리게 한다(_build_avatar_prompt 참고)."""
+    prompt = _build_avatar_prompt(name, relationship_hint, seed_key)
+    pipe = _get_pipeline()
+    with _pipe_lock:
+        image = pipe(
+            prompt=prompt,
+            num_inference_steps=AVATAR_STEPS,
+            guidance_scale=AVATAR_GUIDANCE_SCALE,
+            height=AVATAR_SIZE,
+            width=AVATAR_SIZE,
+        ).images[0]
 
     out = io.BytesIO()
-    result.save(out, format="PNG")
+    image.convert("RGB").save(out, format="PNG")
     return out.getvalue()
-
-
-def generate_avatar_image_bytes(name: str, relationship_hint: str = "", seed_key: str = "") -> bytes:
-    attrs = _pick_style_attributes(seed_key or name)
-    result = client.images.generate(
-        model=AVATAR_MODEL,
-        prompt=_build_avatar_prompt(name, relationship_hint, seed_key),
-        size=AVATAR_SIZE,
-        quality=AVATAR_QUALITY,
-        background="transparent",
-        output_format="png",
-        n=1,
-    )
-    b64 = result.data[0].b64_json
-    raw_bytes = base64.b64decode(b64)
-    return _composite_on_color(raw_bytes, attrs["bg_rgb"])
 
 
 def _load_relationship_hints(user_id: str) -> dict:
