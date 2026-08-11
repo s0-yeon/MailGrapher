@@ -38,6 +38,7 @@ def _get_pipeline():
                 FLUX_MODEL_ID,
                 torch_dtype=torch.bfloat16,
                 low_cpu_mem_usage=True,
+                token=os.getenv("HF_TOKEN") or None,
             )
             pipe.enable_sequential_cpu_offload()
             pipe.vae.enable_slicing()
