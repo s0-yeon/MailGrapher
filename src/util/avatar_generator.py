@@ -2,27 +2,48 @@ import os
 import io
 import re
 import json
-import base64
 import hashlib
 import threading
 import requests
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dotenv import load_dotenv
-from openai import OpenAI
 from PIL import Image, ImageChops
 
 from util.database.db_reader import get_person_descriptions
 
-load_dotenv("src/parquet/.env")
-
-client = OpenAI(api_key=os.getenv("GRAPHRAG_API_KEY"))
-
-AVATAR_MODEL = "gpt-image-1"
-AVATAR_SIZE = "1024x1024"
-AVATAR_QUALITY = "low"
+FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell"
+AVATAR_SIZE = 512
+AVATAR_STEPS = 4
+AVATAR_GUIDANCE_SCALE = 0.0
 
 _map_lock = threading.Lock()
+
+# 로컬 FLUX 파이프라인은 로드 비용이 크고(모델 다운로드 + 초기화) 동시에 여러 스레드가
+# 추론을 돌리면 CPU 오프로드 메모리 관리가 꼬일 수 있어, 프로세스당 인스턴스 하나를
+# 지연 로딩해 재사용하고 추론 자체는 락으로 직렬화한다.
+_pipe_lock = threading.Lock()
+_pipe = None
+
+
+def _get_pipeline():
+    global _pipe
+    if _pipe is not None:
+        return _pipe
+    with _pipe_lock:
+        if _pipe is None:
+            import torch
+            from diffusers import FluxPipeline
+
+            pipe = FluxPipeline.from_pretrained(
+                FLUX_MODEL_ID,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+            )
+            pipe.enable_sequential_cpu_offload()
+            pipe.vae.enable_slicing()
+            pipe.vae.enable_tiling()
+            _pipe = pipe
+    return _pipe
 
 
 def _avatar_filename(email: str) -> str:
@@ -91,39 +112,6 @@ def _pick_style_attributes(seed_key: str) -> dict:
     }
 
 
-def _infer_gender_presentation(name: str) -> str:
-    """
-    이미지 모델(gpt-image-1)에게 "이름 보고 알아서 성별 추론해"라고 맡기면 부정확할 때가 많아
-    (예: '최지유' → 남성으로 잘못 생성), 텍스트 추론에 강한 gpt-4o-mini로 먼저 판별해
-    이미지 프롬프트에 명시적으로 박아 넣는다. 한국어 이름뿐 아니라 영어 등 다른 언어권 이름도
-    함께 판단할 수 있도록 특정 문화권에 한정하지 않는다.
-    반환: 'female' | 'male' | 'unknown'
-    """
-    try:
-        result = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "주어진 사람 이름만 보고 일반적으로 인지되는 성별을 판단하는 AI입니다. "
-                                "이름은 한국어, 영어 등 다양한 언어/문화권에서 올 수 있으니 이름의 언어/문화권에 맞는 "
-                                "통상적인 성별 인식 관습을 적용하세요. "
-                                "반드시 female, male, unknown 중 하나만 정확히 출력하세요. 판단이 애매하면 unknown.",
-                },
-                {"role": "user", "content": f"이름: {name}"},
-            ],
-            temperature=0,
-        )
-        answer = result.choices[0].message.content.strip().lower()
-        if "female" in answer:
-            return "female"
-        if "male" in answer:
-            return "male"
-    except Exception as e:
-        print(f"[AVATAR] 성별 추론 실패 ({name}): {e}")
-    return "unknown"
-
-
 # 초대형 브랜드는 LLM 판별이 흔들릴 수 있어(도메인이 발송대행사인 경우 등) 확정 매핑을 우선 사용한다.
 _KNOWN_BRAND_DOMAINS = {
     "instagram": "instagram.com", "pinterest": "pinterest.com", "google": "google.com",
@@ -143,43 +131,11 @@ _KNOWN_BRAND_DOMAINS = {
 
 def _classify_sender(name: str, domain: str) -> str | None:
     """
-    표시 이름/이메일 도메인만 보고 이 발신자가 실제로 존재하는 기업/서비스의
-    자동 발송(알림, 뉴스레터, 영수증 등) 계정인지 판별한다.
-    실제 기업이면 로고를 찾을 공식 웹사이트 도메인을 반환하고, 실제 개인이거나
-    어떤 기업인지 확실하지 않으면 None을 반환한다(→ 일러스트 아바타로 대체).
+    표시 이름이 알려진 기업/서비스 이름과 일치하면 로고를 찾을 공식 웹사이트 도메인을
+    반환하고, 매핑에 없으면 None을 반환한다(→ 일러스트 아바타로 대체).
+    LLM 판별 없이 확정 매핑(_KNOWN_BRAND_DOMAINS)만 사용한다.
     """
-    known = _KNOWN_BRAND_DOMAINS.get((name or "").strip().lower())
-    if known:
-        return known
-    try:
-        result = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "이메일 발신자 정보를 보고 이것이 실제로 존재하는 기업/서비스가 보낸 "
-                        "자동 발송 계정(알림, 뉴스레터, 영수증, 마케팅 메일 등)인지 판단하는 AI입니다. "
-                        "표시 이름이 유명 기업/서비스 이름과 일치하면, 이메일 도메인이 발송대행사 "
-                        "도메인(예: sendgrid.net, mailgun.org, amazonses.com 등)이라서 그 기업의 "
-                        "공식 도메인과 달라 보여도 표시 이름을 우선 신뢰해 그 기업으로 판단하세요. "
-                        "실제로 존재하는 기업/서비스라면 그 기업의 공식 웹사이트 도메인만 "
-                        "(예: google.com) 정확히 출력하세요. 실제 사람 개인 계정이거나 "
-                        "어느 기업인지 확실하지 않으면 정확히 'PERSON'이라고만 출력하세요."
-                    ),
-                },
-                {"role": "user", "content": f"표시 이름: {name}\n이메일 도메인: {domain}"},
-            ],
-            temperature=0,
-        )
-        answer = (result.choices[0].message.content or "").strip()
-        if not answer or answer.upper() == "PERSON":
-            return None
-        m = re.search(r"[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", answer)
-        return m.group(0).lower() if m else None
-    except Exception as e:
-        print(f"[AVATAR] 기업 판별 실패 ({name}): {e}")
-        return None
+    return _KNOWN_BRAND_DOMAINS.get((name or "").strip().lower())
 
 
 def _logo_content_mask(logo: Image.Image) -> Image.Image:
@@ -348,12 +304,9 @@ A short note about this person's relationship to the user: "{relationship_hint[:
 Use this ONLY as soft inspiration for clothing style and mood (e.g. business-casual for a colleague, relaxed casual for a friend/family member). Never depict any text, objects, logos, or literal scenes from this note."""
 
     attrs = _pick_style_attributes(seed_key or name)
-    gender = _infer_gender_presentation(name)
-    gender_line = {
-        "female": "Depict this person with a clearly feminine gender presentation.",
-        "male": "Depict this person with a clearly masculine gender presentation.",
-        "unknown": "This person's gender is ambiguous from their name — depict them with a gender-neutral, androgynous presentation.",
-    }[gender]
+    # 로컬 FLUX 파이프라인에는 이름만으로 성별을 추론해주는 LLM 호출을 붙이지 않는다
+    # (외부 LLM 의존 제거) — 모든 아바타를 성별 중립으로 일관되게 그린다.
+    gender_line = "This person's gender presentation is intentionally neutral and androgynous."
 
     return f"""You are the illustration engine for a unified corporate contact-avatar system, in the visual language of products like Slack, Notion, or Linear's default member avatars. Every avatar you generate must look like it belongs to the exact same icon set — consistent style, consistent rules, every time. Each person in this set must look like a clearly distinct individual, not a reused default template.
 
@@ -364,7 +317,7 @@ A single friendly portrait of one person whose given name is "{name}". {gender_l
 - Hair: {attrs['hair_color']}, styled {attrs['hair_style']}.
 - Accessory: {attrs['accessory']}.
 - Clothing: a flat, solid {attrs['clothing_color']} top.
-- Background: this image is generated with a fully transparent background — render ONLY the person, with no background art, no vignette, no glow, no shape, no color fill of any kind behind them. A flat solid color will be composited behind the cutout programmatically afterward.
+- Background: a fully flat, solid {attrs['bg_name']} background (hex {attrs['bg_hex']}), completely uniform with no gradient, no vignette, no texture, no shape, no glow — filling the entire canvas edge-to-edge behind the person.
 
 [Art direction]
 - Flat vector illustration, modern corporate-avatar style: clean geometric shapes, confident outlines of uniform stroke width. No gradients, no soft shading, no drop shadows, no textures, no glossy highlights anywhere in the image.
@@ -380,72 +333,25 @@ A single friendly portrait of one person whose given name is "{name}". {gender_l
 - No text, no logos, no watermarks, no signatures, no UI chrome, no photorealism, no 3D rendering, no anime style.""".strip()
 
 
-def _ensure_margins(subject: Image.Image, min_top: float = 0.06, min_side: float = 0.04) -> Image.Image:
-    """
-    모든 아바타가 같은 구도를 갖도록 항상 동일한 규칙으로 재배치한다:
-    머리 위쪽과 좌우는 여백을 보장하고(귀/머리카락이 잘리지 않게), 어깨·옷은
-    의도적으로 캔버스 맨 아래까지 여백 없이 꽉 채운다(표준 프로필 아이콘 스타일).
-    모델이 매번 다른 구도로 그려도 결과 레이아웃은 모든 사람에게 동일하게 보장된다.
-    """
-    w, h = subject.size
-    alpha = subject.split()[-1]
-    # 안티에일리어싱으로 생긴 흐릿한 알파 언저리는 실제로 눈에 보이지 않으므로
-    # bbox 기준에서 제외한다 — 그 언저리까지 "내용물"로 잡으면 실제 옷/몸이
-    # 바닥까지 채워지지 못하고 그 아래로 배경색 여백이 보이게 된다.
-    solid_alpha = alpha.point(lambda a: 255 if a >= 128 else 0)
-    bbox = solid_alpha.getbbox()
-    if not bbox:
-        return subject
-    left, top, right, bottom = bbox
-    content_w, content_h = right - left, bottom - top
-    if content_w <= 0 or content_h <= 0:
-        return subject
-
-    scale = (h * (1 - min_top)) / content_h
-    max_w = w * (1 - 2 * min_side)
-    if content_w * scale > max_w:
-        scale = max_w / content_w
-
-    cropped = subject.crop(bbox)
-    new_w, new_h = max(1, round(content_w * scale)), max(1, round(content_h * scale))
-    cropped = cropped.resize((new_w, new_h), Image.LANCZOS)
-
-    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    canvas.paste(cropped, ((w - new_w) // 2, h - new_h), cropped)
-    return canvas
-
-
-def _composite_on_color(image_bytes: bytes, bg_rgb: tuple) -> bytes:
-    """
-    gpt-image-1을 background="transparent"로 호출해 받은, 인물만 있고 배경은 진짜
-    알파 채널로 투명한 PNG를 우리가 정한 단색 배경 위에 합성한다. 색 차이로 배경을
-    "추측"하지 않고 API가 제공하는 진짜 투명도를 쓰기 때문에, 머리카락이 배경과
-    비슷한 색이어도(예: 검은 머리 + 어두운 배경) 안전하게 분리된다.
-    """
-    subject = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    subject = _ensure_margins(subject)
-    solid_bg = Image.new("RGBA", subject.size, bg_rgb + (255,))
-    result = Image.alpha_composite(solid_bg, subject).convert("RGB")
+def generate_avatar_image_bytes(name: str, relationship_hint: str = "", seed_key: str = "") -> bytes:
+    """로컬 FLUX.1-schnell 파이프라인으로 아바타를 생성한다.
+    diffusers의 기본 FluxPipeline은 gpt-image-1과 달리 진짜 알파 채널 투명 배경을
+    낼 수 없으므로, 배경색은 후처리 합성이 아니라 프롬프트에 직접 지정해 모델이
+    바로 단색 배경 위에 그리게 한다(_build_avatar_prompt 참고)."""
+    prompt = _build_avatar_prompt(name, relationship_hint, seed_key)
+    pipe = _get_pipeline()
+    with _pipe_lock:
+        image = pipe(
+            prompt=prompt,
+            num_inference_steps=AVATAR_STEPS,
+            guidance_scale=AVATAR_GUIDANCE_SCALE,
+            height=AVATAR_SIZE,
+            width=AVATAR_SIZE,
+        ).images[0]
 
     out = io.BytesIO()
-    result.save(out, format="PNG")
+    image.convert("RGB").save(out, format="PNG")
     return out.getvalue()
-
-
-def generate_avatar_image_bytes(name: str, relationship_hint: str = "", seed_key: str = "") -> bytes:
-    attrs = _pick_style_attributes(seed_key or name)
-    result = client.images.generate(
-        model=AVATAR_MODEL,
-        prompt=_build_avatar_prompt(name, relationship_hint, seed_key),
-        size=AVATAR_SIZE,
-        quality=AVATAR_QUALITY,
-        background="transparent",
-        output_format="png",
-        n=1,
-    )
-    b64 = result.data[0].b64_json
-    raw_bytes = base64.b64decode(b64)
-    return _composite_on_color(raw_bytes, attrs["bg_rgb"])
 
 
 def _load_relationship_hints(user_id: str) -> dict:
@@ -499,9 +405,9 @@ def generate_self_avatar(paths, name: str) -> str:
 def generate_person_avatars_batch(paths, people: list) -> dict:
     """
     people: [{ "email": str, "name": str }, ...]
-    이미 캐시된 사람은 건너뛰고, 새로운 발신자만 처리한다. 발신자별로 먼저 LLM에게
-    실제 존재하는 기업/서비스인지 물어보고, 기업이면 실제 로고 이미지를, 아니면(개인)
-    GPT 이미지 API로 생성한 일러스트 아바타를 사용한다.
+    이미 캐시된 사람은 건너뛰고, 새로운 발신자만 처리한다. 표시 이름이 알려진 기업/서비스
+    매핑(_KNOWN_BRAND_DOMAINS)에 해당하면 실제 로고 이미지를, 아니면(개인) 로컬
+    FLUX.1-schnell로 생성한 일러스트 아바타를 사용한다.
     반환: { email_lower: "/person-avatar-image/<user_id>/<filename>" } (요청한 사람 전체에 대한 매핑)
     """
     os.makedirs(paths.AVATAR_IMAGES_DIR, exist_ok=True)
