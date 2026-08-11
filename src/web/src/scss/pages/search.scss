@@ -75,5 +75,13 @@
   text-decoration: none; transition: background 0.15s, color 0.15s; white-space: nowrap;
 }
 .gw-source-btn:hover { background: #26B99A; color: #fff; text-decoration: none; }
+.gw-source-btn-plain { cursor: default; border-color: #d8dde2; color: #73879C; }
+.gw-source-btn-plain:hover { background: #fff; color: #73879C; }
+.gw-source-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 2px;
+  background: #d8dde2; color: #55606b; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700;
+}
 
 footer { display: none !important; }

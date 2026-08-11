@@ -922,6 +922,7 @@ bootstrapApp('mypeople');
         btnDesc.className  = 'mp-detail-tab-btn' + (tab === 'desc'  ? ' active-desc'  : '');
         btnKw.className    = 'mp-detail-tab-btn' + (tab === 'kw'    ? ' active-kw'    : '');
       }
+      window.switchDetailTab = switchDetailTab;  // HTML의 인라인 onclick에서 호출하므로 전역에 노출
 
       async function refreshDetailStats(person) {
         const gmailId = (await userIdPromise) || '';

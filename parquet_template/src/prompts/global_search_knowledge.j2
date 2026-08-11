@@ -1,0 +1,12 @@
+{{ intro }}
+For example:
+{{ example }}
+
+{{ caution_intro }}
+
+{% for c in caution_cases %}
+{{ loop.index }}. {{ c.title }}
+   {{ c.description }}
+
+{% endfor %}
+{{ closing_note }}

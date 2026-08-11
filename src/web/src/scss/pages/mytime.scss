@@ -12,10 +12,11 @@ footer {
 
 /* 페이지 상단 헤더: My Time 로고 + 월별/연별 토글 (좌우 컬럼 밖, 전체 폭) */
 .mt-page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px}
+.mt-header-controls{display:flex;align-items:center;gap:12px}
 .mt-title{font-size:2.6rem;font-weight:800;color:#1b2e22;letter-spacing:-.04em}
 .mt-title span{color:#1a9e6e}
 .mt-mode-toggle{display:flex;gap:3px;background:#e9efec;border-radius:8px;padding:3px}
-.mt-mode-btn{padding:6px 18px;border-radius:6px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;background:transparent;color:#73879C;transition:all .15s;font-family:inherit}
+.mt-mode-btn{margin:0;padding:10px;min-width:72px;border-radius:6px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;background:transparent;color:#73879C;transition:all .15s;font-family:inherit}
 .mt-mode-btn.active{background:#fff;color:#1a9e6e;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 
 /* 좌(아바타 3) : 우(요약/타임라인 7) 레이아웃 — 상단 헤더 아래, 두 컬럼 위/아래 선이 모두 맞도록 stretch */

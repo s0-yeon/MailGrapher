@@ -1,0 +1,78 @@
+-Goal-
+{{ goal }}
+
+---
+
+-Steps-
+1. Identify Entities:
+1.1. Extract entities of the following types: '[{entity_types}]'
+Format: '("entity"{tuple_delimiter}<name>{tuple_delimiter}<type>{tuple_delimiter}<description>)'
+{% for et in entity_types %}
+  * {{ et.name }}: '{{ et.format }}'
+{% endfor %}
+
+1.2. Extraction Rules by Entity Type:
+{% for et in entity_types if entity_type_rules.get(et.name) %}
+* {{ et.name }} Rules:
+{% for r in entity_type_rules[et.name] %}
+  - {{ r }}
+{% endfor %}
+{% endfor %}
+{% if integrated_document_rules %}
+
+1.3. Extraction Rules for Integrated Documents:
+  * {{ integrated_document_rules.main_content_rule }}
+  * If the text contains a section marked "{{ integrated_document_rules.special_section_marker }}", apply the following rules EXCLUSIVELY:
+{% for r in integrated_document_rules.special_section_rules %}
+    - {{ r }}
+{% endfor %}
+{% endif %}
+
+2. Identify Relationships:
+  * Relationship directions are fixed — do NOT reverse them. Source and Target MUST match the specified entity types exactly.
+  * Format: '("relationship"{tuple_delimiter}<source>{tuple_delimiter}<target>{tuple_delimiter}<type>{tuple_delimiter}<description_in_Korean>{tuple_delimiter}<strength_1_10>)'
+
+  | Type | Source | Target | When to use |
+  |------|--------|--------|-------------|
+{% for rt in relationship_types %}
+  | {{ rt.name }} | {{ rt.source }} | {{ rt.target }} | {{ rt.when }} |
+{% endfor %}
+
+  Rules:
+{% for r in relationship_rules %}
+    * {{ r }}
+{% endfor %}
+
+3. Grounding Rules:
+{% for r in grounding_rules %}
+   * {{ r }}
+{% endfor %}
+   * Output as a single list delimited by {record_delimiter}.
+   * End with {completion_delimiter}.
+
+---
+
+-Examples-
+
+{% for ex in examples %}
+Example {{ loop.index }}
+Entity_types: {{ ex.entity_types|join(', ') }}
+Text:
+{{ ex.text }}
+
+Output:
+{% for e in ex.entities %}("entity"{tuple_delimiter}{{ e.name }}{tuple_delimiter}{{ e.type }}{tuple_delimiter}{{ e.description }})
+{record_delimiter}
+{% endfor %}{% for r in ex.relationships %}("relationship"{tuple_delimiter}{{ r.source }}{tuple_delimiter}{{ r.target }}{tuple_delimiter}{{ r.type }}{tuple_delimiter}{{ r.description }}{tuple_delimiter}{{ r.strength }}){% if not loop.last %}
+{record_delimiter}
+{% endif %}
+{% endfor %}
+{completion_delimiter}
+
+---
+{% endfor %}
+
+-Real Data-
+Entity_types: {entity_types}
+Text: {input_text}
+Output:

@@ -3,7 +3,6 @@ import base64
 import re
 import imaplib
 import email
-import time
 import traceback
 
 from util.imap_message import _imap_build_block
@@ -83,7 +82,7 @@ def _imap_parse_list_line(line: bytes):
 
 # IMAP 서버에 접속해서 선택한 폴더들의 메일을 가져옴
 def _imap_fetch_content(host: str, port: int, use_ssl: bool, user: str, password: str,
-                         folders: list[str], limit: int, my_email: str) -> tuple[str, list[dict]]:
+                         folders: list[str], limit: int, my_email: str, on_batch=None) -> tuple[str, list[dict]]:
     conn = imaplib.IMAP4_SSL(host, port) if use_ssl else imaplib.IMAP4(host, port)
 
     try:
@@ -116,14 +115,12 @@ def _imap_fetch_content(host: str, port: int, use_ssl: bool, user: str, password
                 batch = uids[batch_start:batch_start + IMAP_FETCH_BATCH_SIZE]
                 batch_arg = b",".join(batch)
 
-                fetch_started = time.perf_counter()
                 try:
                     status, msg_data = conn.uid("fetch", batch_arg, "(BODY.PEEK[])")
                 except Exception as e:
                     print(f"[IMAP] 배치 FETCH 오류, 스킵: uids={batch} / {e}")
                     traceback.print_exc()
                     continue
-                fetch_elapsed = time.perf_counter() - fetch_started
 
                 if status != "OK" or not msg_data:
                     continue
@@ -151,7 +148,6 @@ def _imap_fetch_content(host: str, port: int, use_ssl: bool, user: str, password
                         for uid, raw in zip(batch, ordered_raw)
                     }
 
-                parse_started = time.perf_counter()
                 for uid in batch:
                     uid_str = uid.decode(errors="ignore") if isinstance(uid, bytes) else str(uid)
                     raw_email = raw_by_uid.get(uid_str)
@@ -175,15 +171,11 @@ def _imap_fetch_content(host: str, port: int, use_ssl: bool, user: str, password
                     all_blocks.append(block_text)
                     all_attachments.extend(attachments_payload)
 
-                parse_elapsed = time.perf_counter() - parse_started
-                batch_bytes = sum(len(v) for v in raw_by_uid.values())
-                batch_kb = batch_bytes / 1024
-                throughput_kbs = batch_kb / fetch_elapsed if fetch_elapsed > 0 else 0
-                print(
-                    f"[IMAP] {folder} 배치 {batch_num}/{total_batches} ({len(batch)}개, {batch_kb:.0f}KB): "
-                    f"FETCH {fetch_elapsed:.2f}초({throughput_kbs:.0f}KB/s) + 파싱 {parse_elapsed:.2f}초 "
-                    f"= {fetch_elapsed + parse_elapsed:.2f}초"
-                )
+                if on_batch:
+                    try:
+                        on_batch(folder, batch_num, total_batches, len(batch))
+                    except Exception:
+                        pass  # 진행상황 알림 실패는 수집 자체를 막으면 안 되므로 무시
 
         content = "\n\n".join(all_blocks).strip()
         if content:

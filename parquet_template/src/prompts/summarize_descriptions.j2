@@ -1,0 +1,36 @@
+{{ goal }}
+
+-Entity Description Format Rules-
+Depending on the entity type, the format below must be strictly maintained. Natural language narration outside the format is prohibited.
+
+{% for et in entity_types %}
+  * {{ et.name }}: {{ et.format }}
+{% endfor %}
+
+---
+
+-Additional Rules-
+{% for r in additional_rules %}
+* {{ r }}
+{% endfor %}
+
+---
+
+-Examples-
+{% for ex in examples %}
+Example {{ loop.index }} ({{ ex.type }} 타입):
+Entities: {{ ex.entity_name }}
+Description List:
+{% for d in ex.description_list %}
+- {{ d }}
+{% endfor %}
+Output:
+{{ ex.output }}
+{% endfor %}
+
+---
+
+-Real Data-
+Entities: {entity_name}
+Description List: {description_list}
+Output:

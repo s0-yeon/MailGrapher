@@ -104,9 +104,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-dir", required=True)
     parser.add_argument("--user-id", required=True)
+    parser.add_argument("--domain", required=True)
     args = parser.parse_args()
 
-    paths = UserPaths(args.base_dir, args.user_id)
+    paths = UserPaths(args.base_dir, args.user_id, args.domain)
     print("parquet → JSON 변환 시작\n")
  
     # 인덱싱이 안된 경우

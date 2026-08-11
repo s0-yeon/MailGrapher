@@ -188,9 +188,9 @@ def _save_mail_contact_stats(paths, mode: str = "rewrite"):
     type_col = 'type' if 'type' in entities_df.columns else 'entity_type'
     emails   = entities_df[entities_df[type_col].str.upper() == 'EMAIL']
 
-    # relationships.parquet 기준: 실제 SENT_BY/SENT_TO가 있는 연락처만
-    sent_by_count = rel_df[rel_df['description'] == 'SENT_BY'].groupby('target').size()
-    sent_to_count = rel_df[rel_df['description'].str.contains('SENT_TO')].groupby('target').size()
+    # relationships.parquet 기준: 실제 sent_by/sent_to가 있는 연락처만
+    sent_by_count = rel_df[rel_df['description'] == 'sent_by'].groupby('target').size()
+    sent_to_count = rel_df[rel_df['description'].str.contains('sent_to')].groupby('target').size()
 
     all_contacts = set(sent_by_count.index) | set(sent_to_count.index)
     all_contacts.discard(paths.USER_ID.upper())   # 본인 제외
@@ -468,7 +468,7 @@ def generate_person_descriptions(paths) -> dict:
             person_email, desc = future.result()
             if desc:
                 descriptions[person_email] = desc
-                print(f"[PROFILES] 완료: {person_email}")
+                # print(f"[PROFILES] 완료: {person_email}")
 
     print(f"[PROFILES] 총 {len(descriptions)}명 프로필 생성 완료")
     return descriptions

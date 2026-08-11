@@ -1,4 +1,70 @@
-# LightRAG 설치 기록 (Windows / Git Bash 기준)
+# MailGrapher
+
+메일 데이터를 분석해 지식 그래프를 만들고, 사람/시간 통계와 자연어 검색을 제공
+
+# 실행 방법
+
+## 1. 사전 준비
+
+- Python 3.11
+- Node.js
+- MySQL 서버
+
+## 2. 파이썬 가상환경 & 모듈 설치
+
+```bash
+python -m venv mailgrapher-venv
+mailgrapher-venv\Scripts\activate
+```
+
+가상환경 실행
+
+```bash
+source mailgrapher-venv/Scripts/activate
+```
+
+모듈 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+## 3. 환경변수 설정
+
+`src/parquet/.env` : 노션에서 복붙하세요(mail grapher용 .env)
+
+## 4. MySQL 데이터베이스 생성
+
+mail_grapher_db 를 사용. (노션 참고)
+
+## 5. 백엔드 실행 (프로젝트 루트에서)
+
+```bash
+python src/app.py
+```
+
+→ `http://localhost/dashboard/` 에서 실행됨
+
+## 6. 프론트엔드 실행 (`src/web`에서)
+
+```bash
+npm install
+npm run build
+```
+
+→ 빌드 후 백엔드(80번)만 켜면 `http://localhost` 로 바로 접속 가능
+
+개발 중이라 화면을 수정하며 바로 확인하고 싶다면:
+
+```bash
+npm run dev
+```
+
+→ `http://localhost:3000` (단, 백엔드(80)도 같이 켜져 있어야 API가 동작함)
+
+---
+
+# LightRAG 설치 (Windows / Git Bash 기준)
 
 MailGrapher 프로젝트에서 LightRAG를 서버로 띄우기 위해 진행한 과정 정리.
 가상환경 이름: `mailgrapher-venv`
@@ -39,24 +105,24 @@ uv --version
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
-## 4. 가상환경 이름 지정 (mailgrapher-venv) + 의존성 설치
+## 4. 가상환경 이름 지정 (lightrag-venv) + 의존성 설치
 
 ```bash
-export UV_PROJECT_ENVIRONMENT=mailgrapher-venv
-uv venv mailgrapher-venv
+export UV_PROJECT_ENVIRONMENT=lightrag-venv
+uv venv lightrag-venv
 uv sync --extra test --extra offline
 ```
 
 영구 등록 (한 번만 실행, 완료):
 
 ```bash
-echo 'export UV_PROJECT_ENVIRONMENT=mailgrapher-venv' >> ~/.bashrc
+echo 'export UV_PROJECT_ENVIRONMENT=lightrag-venv' >> ~/.bashrc
 ```
 
 ## 5. 가상환경 활성화
 
 ```bash
-source mailgrapher-venv/Scripts/activate
+source lightrag-venv/Scripts/activate
 ```
 
 ## 6. 웹 UI 빌드

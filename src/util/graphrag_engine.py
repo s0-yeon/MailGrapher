@@ -201,7 +201,7 @@ def _build_local_engine(output_dir: str, graphrag_root: str) -> tuple[LocalSearc
         embedding_vectorstore_key=EntityVectorStoreKey.ID,
     )
 
-    prompt_path = os.path.join(graphrag_root, "prompts", "local_search_system_prompt.txt")
+    prompt_path = os.path.join(graphrag_root, "prompts", "local_search.txt")
     with open(prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
@@ -261,9 +261,9 @@ def _build_global_engine(output_dir: str, graphrag_root: str) -> tuple[GlobalSea
     )
 
     prompts_dir = os.path.join(graphrag_root, "prompts")
-    with open(os.path.join(prompts_dir, "global_search_map_system_prompt.txt"), "r", encoding="utf-8") as f:
+    with open(os.path.join(prompts_dir, "global_search_map.txt"), "r", encoding="utf-8") as f:
         map_prompt = f.read()
-    with open(os.path.join(prompts_dir, "global_search_reduce_system_prompt.txt"), "r", encoding="utf-8") as f:
+    with open(os.path.join(prompts_dir, "global_search_reduce.txt"), "r", encoding="utf-8") as f:
         reduce_prompt = f.read()
 
     engine = GlobalSearch(

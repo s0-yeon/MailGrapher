@@ -24,12 +24,12 @@ from util.database.db_writer import mark_attachments_as_processed
 from util.jobs.job_run import build_graphrag_update, build_graph_json
 
 # 첨부파일 텍스트 요약
-def _summarize_attachment(text: str, filename: str) -> str:
+def _summarize_attachment(text: str, filename: str, domain: str) -> str:
     pure_len = len(text.replace(" ", "").replace("\n", ""))
     if pure_len < 500:
         return text
 
-    prompt_path = os.path.join("parquet_template", "prompts", "summarize_attachment.txt")
+    prompt_path = os.path.join("parquet_template", "rendered", domain, "prompts", "summarize_attachment.txt")
     with open(prompt_path, "r", encoding="utf-8") as f:
         prompt = f.read().strip()
 
@@ -238,7 +238,7 @@ def _run_attachment_pipeline(job_id: str, paths, attachments: list, env: dict, i
             summarized_by_mail[mail_id] = [
                 {
                     "name": item["name"],
-                    "text": _summarize_attachment(item["text"], item["name"])
+                    "text": _summarize_attachment(item["text"], item["name"], paths.DOMAIN)
                 }
                 for item in items
             ]

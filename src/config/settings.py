@@ -2,11 +2,17 @@ import os
 
 # 여기서 3번 올라가면 프로젝트 루트
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GRAPHRAG_SETTINGS_DIR = os.path.join(BASE_DIR,"parquet_template","settings.yaml")
-GRAPHRAG_PROMPTS_DIR = os.path.join(BASE_DIR,"parquet_template", "prompts")
-# config/setting.py -> src/config/setting.py
 
-MAIL_BLOCK_SEP = "============================================================"     # 메일 블록 구분자
+# 도메인별 설정 파일 경로
+def GRAPHRAG_SETTINGS_DIR(domain):
+    return os.path.join(BASE_DIR, "parquet_template", "rendered", domain, "settings.yaml")
+
+# 도메인별 프롬프트 경로
+def GRAPHRAG_PROMPTS_DIR(domain):
+    return os.path.join(BASE_DIR, "parquet_template", "rendered", domain, "prompts")
+
+# 메일 블록 구분자
+MAIL_BLOCK_SEP = "============================================================"     
 
 #아래 경로는 사용자 마다 달라지므로 재정의 필요
 #GRAPH_BUILD_SCRIPT = os.path.join(BASE_DIR, "src", "parquet2json.py")     # 메일 텍스트 → 그래프 JSON 변환 스크립트 경로

@@ -1,0 +1,49 @@
+-Target activity-
+{{ target_activity }}
+
+---
+
+-Goal-
+{{ goal }}
+
+---
+
+-Steps-
+1. Extract all named entities that match the predefined entity specification. Entity specification can either be a list of entity names or a list of entity types.
+2. For each entity identified in step 1, extract all claims associated with the entity. Claims need to match the specified claim description, and the entity should be the subject of the claim.
+For each claim, extract the following information:
+{% for f in claim_fields %}
+- {{ f.name }}: {{ f.description }}
+{% endfor %}
+Format each claim as (<subject_entity>{tuple_delimiter}<object_entity>{tuple_delimiter}<claim_type>{tuple_delimiter}<claim_status>{tuple_delimiter}<claim_start_date>{tuple_delimiter}<claim_end_date>{tuple_delimiter}<claim_description>{tuple_delimiter}<claim_source>)
+
+3. Return output in English as a single list of all the claims identified in steps 1 and 2. Use **{record_delimiter}** as the list delimiter.
+
+4. When finished, output {completion_delimiter}
+
+---
+
+-Examples-
+{% for ex in examples %}
+Example {{ loop.index }}:
+Entity specification: {{ ex.entity_specification }}
+Claim description: {{ ex.claim_description }}
+Text: {{ ex.text }}
+Output:
+
+{% for c in ex.claims %}({{ c.subject }}{tuple_delimiter}{{ c.object }}{tuple_delimiter}{{ c.type }}{tuple_delimiter}{{ c.status }}{tuple_delimiter}{{ c.start_date }}{tuple_delimiter}{{ c.end_date }}{tuple_delimiter}{{ c.description }}{tuple_delimiter}{{ c.source }}){% if not loop.last %}
+{record_delimiter}
+{% endif %}
+{% endfor %}
+{completion_delimiter}
+
+{% endfor %}
+
+---
+
+-Real Data-
+Use the following input for your answer.
+Entity specification: {entity_specs}
+Claim description: {claim_description}
+Text: {input_text}
+Output:

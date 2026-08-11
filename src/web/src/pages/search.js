@@ -104,12 +104,19 @@ function showLoading(q) {
 function showResult(q, text, sourceIds) {
   let sourceHtml = '';
   if (sourceIds && sourceIds.length > 0) {
-    const items = sourceIds.map(id =>
-      `<a class="gw-source-btn" href="https://mail.google.com/mail/u/0/#all/${escapeAttr(id)}" target="_blank" rel="noopener noreferrer">
-        <i class="fas fa-envelope"></i> 메일로 확인하기
-      </a>`
+    // source_ids는 {id, account} 객체 배열. 메일 하나당 칩 하나씩 만들면 같은 계정이 중복으로 잔뜩 나오므로,
+    // "이 답변이 어느 계정 데이터에서 나왔는지"가 핵심이니 계정별로 묶어서 칩 하나씩만 보여준다.
+    const countByAccount = new Map();
+    sourceIds.forEach(src => {
+      const account = (typeof src === 'string' ? null : src.account) || '알 수 없음';
+      countByAccount.set(account, (countByAccount.get(account) || 0) + 1);
+    });
+    const items = Array.from(countByAccount.entries()).map(([account, count]) =>
+      `<span class="gw-source-btn gw-source-btn-plain">
+        <i class="fas fa-envelope"></i> ${escapeHtml(account)}${count > 1 ? `<span class="gw-source-count">${count}</span>` : ''}
+      </span>`
     ).join('');
-    sourceHtml = `<div class="gw-source-emails"><div class="gw-source-label">근거 메일</div><div class="gw-source-btns">${items}</div></div>`;
+    sourceHtml = `<div class="gw-source-emails"><div class="gw-source-label">근거 계정</div><div class="gw-source-btns">${items}</div></div>`;
   }
   document.getElementById('result-container').innerHTML = `
     <div class="gw-query-label">검색어: <strong>${escapeHtml(q)}</strong></div>

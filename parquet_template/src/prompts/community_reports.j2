@@ -1,0 +1,69 @@
+{{ goal_intro }}
+
+-Goal-
+{{ goal }}
+
+---
+
+-Report Structure-
+The report should include the following sections:
+
+* TITLE: {{ report_sections.title_rule }}
+* SUMMARY: {{ report_sections.summary_rule }}
+* CATEGORY: Classify this community into exactly one of the following top-level categories. This field is used for hierarchical clustering — choose the category that best reflects the primary purpose of the emails in this cluster.
+{% for c in category_taxonomy %}
+  - "{{ c.name }}" : {{ c.description }}
+{% endfor %}
+* PURPOSE: {{ report_sections.purpose_rule }}
+* IMPORTANCE RATING: A float score between 0-10 representing how significant this email cluster is to the user's activity. Score according to the following criteria:
+{% for r in rating_criteria %}
+  - {{ r.range }}: {{ r.description }}
+{% endfor %}
+* RATING EXPLANATION: {{ report_sections.rating_explanation_rule }}
+* DETAILED FINDINGS: A list of 3-5 key insights about the community. Each insight should have a short summary followed by an explanatory paragraph grounded in the data. Write findings in Korean. Focus on the following angles when applicable:
+{% for a in finding_angles %}
+  {{ loop.index }}. {{ a }}
+{% endfor %}
+
+Return output as a well-formed JSON-formatted string with the following format:
+    {{ output_format }}
+
+---
+
+-Grounding Rules-
+{% for r in citation_rule %}
+{{ r }}
+{% endfor %}
+
+Additional rules:
+{{ additional_rules_intro }}
+{% for r in grounding_rules %}
+* {{ r }}
+{% endfor %}
+
+---
+
+-Examples-
+{% for ex in examples %}
+Example {{ loop.index }}:
+id,entity,description
+{% for e in ex.entities %}{{ e.id }},{{ e.entity }},{{ e.description }}
+{% endfor %}
+Relationships
+
+id,source,target,description
+{% for r in ex.relationships %}{{ r.id }},{{ r.source }},{{ r.target }},{{ r.description }}
+{% endfor %}
+Output:
+{{ ex.output }}
+{% endfor %}
+
+---
+
+-Real Data-
+Use the following text for your answer. Do not make anything up in your answer.
+Text:
+{input_text}
+Return output as a well-formed JSON-formatted string with the following format:
+    {{ output_format }}
+Output:

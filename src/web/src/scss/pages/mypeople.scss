@@ -90,6 +90,7 @@
       }
       /* ── 정렬 컨트롤 묶음(광고 제거 버튼 + 정렬 드롭다운) ── */
       .mp-header-controls { display: flex; align-items: center; gap: 8px; }
+      #account-picker-mount { margin-top: 20px; }
       .mp-brand-filter-btn {
         box-sizing: border-box; appearance: none; -webkit-appearance: none;
         font-family: inherit; line-height: inherit; margin: 0;

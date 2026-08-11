@@ -3,7 +3,7 @@
 /* ── 레이아웃 ── */
 .gw-collect-wrap {
   padding: 28px 32px;
-  max-width: 860px;
+  width: 100%;
 }
 
 .gw-page-title {
@@ -301,6 +301,10 @@
   font-size: 0.82rem;
   gap: 6px;
 }
+
+/* ── job 패널 목록 (계정별로 하나씩 쌓임) ── */
+.gw-jobs-list { margin-top: 20px; }
+.gw-jobs-list .gw-log-empty { height: auto; padding: 40px 0; }
 
 /* ── 결과 요약 ── */
 .gw-result-row {

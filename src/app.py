@@ -45,7 +45,7 @@ from util.jobs.job_run import (
     start_graph_update_pipeline_background
 )
 from config.settings import *
-from util.user_path import UserPaths
+from util.user_path import UserPaths, list_accounts, list_indexed_user_ids
 from util.database.db_reader import (
     get_mail_stats,
     get_keyword_stats,
@@ -68,7 +68,7 @@ from util.attachment_manager import _run_attachment_pipeline
 from util.database.db_writer import (
     save_query_to_db,
     init_processed_attachments_table,
-    init_keyword_mail_table,
+    init_mail_keyword_table,
     filter_unprocessed_attachments,
     mark_attachments_as_processed,
     rebuild_keyword_mail,
@@ -82,7 +82,8 @@ from util.avatar_generator import (
 )
 from util.sse_broadcaster import (
     subscribe,
-    unsubscribe
+    unsubscribe,
+    broadcast
 )
 from config.db import get_db_connection
 from util.graphrag import (
@@ -113,7 +114,7 @@ CORS(app)
 
 # 서버 시작 시 테이블 초기화 실행
 init_processed_attachments_table()
-init_keyword_mail_table()
+init_mail_keyword_table()
 
 # 한글 출력 시 깨지거나 에러 나는 것 방지
 if hasattr(sys.stdout, "reconfigure"):
@@ -156,26 +157,46 @@ def run_query_async():
     update_job(job_id, status="pending", result=None, resType=resType)
 
     def _worker():  # 백그라운드 스레드에서 실행되는 실제 작업 함수
-        from util.graphrag_query import run_graphrag_query
+        from util.graphrag_query import run_graphrag_query, run_federated_local_search, run_federated_global_search
         try:
-            paths = UserPaths(BASE_DIR, user_id)
+            paths = UserPaths(BASE_DIR, user_id, "base")
             env = os.environ.copy()
             env["USER_ID"] = user_id
 
             # 날짜 범위 쿼리일 시 parquet 직접 필터링해서 LLM에게 넘기기, 아니면 GraphRAG로 처리
-            answer = run_date_range_query(message, paths) # 이게 None이면 GraphRAG로 
+            answer = run_date_range_query(message, paths) # 이게 None이면 GraphRAG로
             source_ids = []  # 초기화
             if answer is None:
                 full_message = message + " 영어 말고 한국어로 답변해줘."
 
                 resMethod = _classify_query_method(message)
-                try: # 엔진 객체 직접 호출 방식
-                    answer, source_ids = run_graphrag_query(full_message,message, paths, method=resMethod)
-                except Exception as e:
-                    # API 방식 실패 시 기존 CLI 방식으로 자동 fallback
-                    print(f"[ENGINE] API 실패, CLI fallback: {e}")
-                    answer = _run_graphrag(full_message,message, resMethod, paths, resType)
-                    # source_ids = _extract_source_mail_ids(answer)
+
+                # local/global 둘 다 인덱싱된 계정 전체를 대상으로 함(연합 검색).
+                # TODO: 실제 domain 선택 로직이 생기면 "base" 리터럴을 그 값으로 교체
+                accounts_paths = [UserPaths(BASE_DIR, uid, "base") for uid in list_indexed_user_ids(BASE_DIR)] or [paths]
+
+                if resMethod == "local":
+                    try:
+                        answer, source_ids = run_federated_local_search(full_message, message, accounts_paths, primary_user_id=user_id)
+                    except Exception as e:
+                        print(f"[ENGINE] 연합 검색 실패, 선택된 계정으로 폴백: {e}")
+                        try:
+                            answer, source_ids = run_graphrag_query(full_message, message, paths, method=resMethod)
+                        except Exception as e2:
+                            print(f"[ENGINE] API 실패, CLI fallback: {e2}")
+                            answer = _run_graphrag(full_message,message, resMethod, paths, resType)
+                else:
+                    try:
+                        answer, source_ids = run_federated_global_search(full_message, message, accounts_paths, primary_user_id=user_id)
+                    except Exception as e:
+                        print(f"[ENGINE] 연합 글로벌 검색 실패, 선택된 계정으로 폴백: {e}")
+                        try: # 엔진 객체 직접 호출 방식
+                            answer, source_ids = run_graphrag_query(full_message,message, paths, method=resMethod)
+                        except Exception as e2:
+                            # API 방식 실패 시 기존 CLI 방식으로 자동 fallback
+                            print(f"[ENGINE] API 실패, CLI fallback: {e2}")
+                            answer = _run_graphrag(full_message,message, resMethod, paths, resType)
+                            # source_ids = _extract_source_mail_ids(answer)
 
             result = answer
             update_job(job_id, status="done", result=result, source_ids=source_ids)
@@ -270,7 +291,7 @@ def run_query():
     if not user_id:
         return jsonify({'error': 'user_id가 비어있습니다.'}), 400
 
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     message += " 영어 말고 한국어로 답변해줘."
 
     try:
@@ -290,6 +311,7 @@ def upload():
     # 1) 데이터 수신
     data = request.json or {}
     filename = data.get("filename") or f"mail_{int(time.time())}.txt"
+    mail_platform = (data.get("mail_platform") or "gmail").strip().lower()
     content = data.get("content") or ""
     attachments = data.get("attachment") or []
     requested_mode = data.get("syncmode", "append")
@@ -297,7 +319,8 @@ def upload():
     is_last = data.get("is_last", True)
     batch_offset = data.get("batch_offset", 0)
 
-    paths = UserPaths(BASE_DIR, user_id)
+    # TODO: 실제 domain 선택 로직이 생기면 "base" 리터럴을 그 값으로 교체
+    paths = UserPaths(BASE_DIR, user_id, "base")
 
     if not str(content).strip():
         return jsonify({"ok": False, "error": "content가 비어있습니다."}), 400
@@ -350,14 +373,14 @@ def upload():
                 print(f"[CLEAN] stats.json 삭제 실패 (무시): {e}")
 
         try:
-            from util.database.db_writer import get_latest_user_record
-            latest_user = get_latest_user_record(user_id)
-            if latest_user:
+            from util.database.db_writer import get_latest_mail_account
+            latest_account = get_latest_mail_account(user_id)
+            if latest_account:
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    "DELETE FROM processed_attachments WHERE user_account_id = %s AND update_date = %s",
-                    (latest_user["user_account_id"], latest_user["update_date"])
+                    "DELETE FROM processed_attachments WHERE user_mail_account_id = %s AND index_date = %s",
+                    (latest_account["user_mail_account_id"], latest_account["index_date"])
                 )
                 conn.commit()
                 cursor.close()
@@ -547,7 +570,7 @@ def upload():
         # rewrite 배치 완료 시 총 누적 메일 수로 기록 (마지막 배치 added_count만 넘기면 일부만 저장되는 버그 방지)
         final_text = _read_latest_text(paths)
         total_mail_count = len([b for b in _split_mail_blocks(final_text) if _extract_mail_id_from_block(b)])
-        start_graph_pipeline_background(graph_job_id, paths, env, added_count=total_mail_count, max_mails=paths.MAX_MAILS)
+        start_graph_pipeline_background(graph_job_id, paths, env, added_count=total_mail_count, max_mails=paths.MAX_MAILS, mail_platform=mail_platform)
 
     else:  # append
         if new_ids:
@@ -592,7 +615,7 @@ def graph_data():
     if not user_id:
         return jsonify({"ok": False, "error": "user_id가 비어있습니다."}), 400
 
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
 
     if not os.path.exists(paths.GRAPH_JSON_PATH):
         return jsonify({"nodes": [], "edges": [], "error": "graph json not found"}), 200
@@ -629,7 +652,7 @@ def index_status():
     user_id = (request.args.get("user_id") or "").strip().lower()
     if not user_id:
         return jsonify({"error": "user_id가 비어있습니다."}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"indexed": _is_index_ready(paths)})
 
 # 엔드포인트: GET /init  — localStorage에 flask_url 자동 저장 후 대시보드로 이동
@@ -690,7 +713,7 @@ def upload_attachments():
         is_last = data.get("is_last", False)
         if is_last:
             # 이미 누적된 attachment_latest.csv로 GraphRAG update 실행
-            paths = UserPaths(BASE_DIR, user_id)
+            paths = UserPaths(BASE_DIR, user_id, "base")
             if os.path.exists(os.path.join(paths.MAIL_DIR, "attachment_latest.csv")):
                 job_id = str(uuid.uuid4())[:8]
                 create_job(job_id, job_type="attachment")
@@ -707,7 +730,8 @@ def upload_attachments():
                 return jsonify({"ok": True, "message": "finish signal received"})
         return jsonify({"ok": False, "error": "attachments가 비어있습니다."}), 400
     
-    paths = UserPaths(BASE_DIR, user_id)
+    # TODO: 실제 domain 선택 로직이 생기면 "base" 리터럴을 그 값으로 교체
+    paths = UserPaths(BASE_DIR, user_id, "base")
 
     # 2) 메일 인덱스가 준비되지 않았으면 거절
     # 메일 본문 인덱싱 완료 전에 첨부파일 처리하면 불완전한 그래프에 update가 붙는 문제 방지
@@ -777,7 +801,7 @@ def send_mail_stats():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     print(f"[MAIL_STATS] user_id={user_id}")
     print(f"[MAIL_STATS] path={paths.USER_ROOT}")
     return jsonify({"user_id": user_id, "data": get_mail_stats(paths)})
@@ -796,7 +820,7 @@ def send_keyword_stats():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"user_id": user_id, "data": get_keyword_stats(paths)})
 
 @app.route("/keyword-by-person-date", methods=["POST"]) # 각 사람마다 주고받은 메일의 키위드 리턴
@@ -827,10 +851,10 @@ def rebuild_keyword_mail_route():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     try:
         rebuild_keyword_mail(paths)
-        return jsonify({"ok": True, "message": "keyword_mail 테이블 재구성 완료"})
+        return jsonify({"ok": True, "message": "mail_keyword 테이블 재구성 완료"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -843,7 +867,7 @@ def upload_contact_photos():
         return jsonify({"error": "user_id is required"}), 400
     if not isinstance(photos, dict) or not photos:
         return jsonify({"ok": True, "message": "사진 없음"}), 200
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     os.makedirs(paths.MAIL_STATICS_PATH, exist_ok=True)
     existing = {}
     if os.path.exists(paths.MAIL_PHOTOS_PATH):
@@ -860,7 +884,7 @@ def get_contact_photos():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({}), 200
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     if not os.path.exists(paths.MAIL_PHOTOS_PATH):
         return jsonify({}), 200
     with open(paths.MAIL_PHOTOS_PATH, "r", encoding="utf-8") as f:
@@ -872,7 +896,7 @@ def get_person_avatars():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({}), 200
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify(get_cached_person_avatars(paths))
 
 @app.route("/generate-person-avatars", methods=["POST"])
@@ -882,13 +906,13 @@ def generate_person_avatars():
     people = data.get("people", [])
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     result = generate_person_avatars_batch(paths, people)
     return jsonify({"user_id": user_id, "data": result})
 
 @app.route("/person-avatar-image/<user_id>/<filename>")
 def person_avatar_image(user_id, filename):
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return send_from_directory(paths.AVATAR_IMAGES_DIR, filename)
 
 @app.route("/self-avatar", methods=["POST"])
@@ -897,7 +921,7 @@ def get_self_avatar():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({}), 200
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"url": get_cached_self_avatar(paths)})
 
 @app.route("/generate-self-avatar", methods=["POST"])
@@ -907,7 +931,7 @@ def generate_self_avatar_route():
     name = data.get("name", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     url = generate_self_avatar(paths, name)
     return jsonify({"url": url})
 
@@ -917,7 +941,7 @@ def send_high_affinity_person_stats():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"user_id": user_id, "data": get_high_affinity_person_stats(paths)})
 
 @app.route("/user_rating_stats", methods=["POST"])
@@ -926,7 +950,7 @@ def send_user_rating_stats():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"user_id": user_id, "data": get_user_rating_stats()})
 
 @app.route("/mail_sync_stats", methods=["POST"])
@@ -935,7 +959,7 @@ def send_mail_sync_stats():
     user_id = data.get("user_id", "").strip()
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     return jsonify({"user_id": user_id, "data": get_mail_sync_stats(paths)})
 
 @app.route("/mail-exchange-stats", methods=["POST"])
@@ -993,7 +1017,7 @@ def send_person_emails_in_range():
 
     # 2) 제목/본문은 MySQL에 없으므로(집계용 테이블), 메일 ID별로 파일 캐시에서만 조회한다.
     #    캐시에 없는 메일은 건너뛴다.
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     mail_cache = _load_mail_message_cache(paths)
 
     def _fetch_one(ref):
@@ -1058,8 +1082,8 @@ def send_intimacy():
         return jsonify({"error": "start_date and end_date are required"}), 400
 
     result = calculate_eis(
-        user_account_id=user_id,
-        person_account_id=person_user_id,
+        user_mail_account_id=user_id,
+        person_mail_account_id=person_user_id,
         start_date=start_date,
         end_date=end_date,
         apply_volume_correction=False,
@@ -1092,7 +1116,7 @@ def send_mail_summaries():
     if summary_type not in ("monthly", "yearly"):
         return jsonify({"error": "type must be 'monthly' or 'yearly'"}), 400
 
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
     if not os.path.exists(paths.MAIL_SUMMARIES_PATH):
         return jsonify({"error": "summaries not generated yet"}), 404
 
@@ -1111,7 +1135,7 @@ def contacts_proxy():
     if not user_id:
         return jsonify({'ok': False, 'error': 'user_id가 비어있습니다.'}), 400
 
-    paths = UserPaths(BASE_DIR, user_id)
+    paths = UserPaths(BASE_DIR, user_id, "base")
 
     if action == 'getFrequentContacts':
         max_results = int(data.get('maxResults', 100))
@@ -1206,6 +1230,27 @@ def imap_list_folders():
             except Exception:
                 pass
 
+# IMAP 호스트 → 실제 메일 플랫폼 이름 매핑 (mail_account.mail_platform에 저장)
+_IMAP_HOST_PLATFORM_MAP = {
+    "imap.gmail.com": "gmail",
+    "imap.naver.com": "naver",
+    "imap.daum.net": "daum",
+    "imap.mail.me.com": "icloud",
+    "outlook.office365.com": "outlook",
+    "imap-mail.outlook.com": "outlook",
+    "imap.mail.yahoo.com": "yahoo",
+}
+
+def _detect_imap_platform(host: str) -> str:
+    host_lower = (host or "").strip().lower()
+    if host_lower in _IMAP_HOST_PLATFORM_MAP:
+        return _IMAP_HOST_PLATFORM_MAP[host_lower]
+    # 매핑에 없는 커스텀 호스트는 도메인에서 서비스명을 추정 (예: imap.foo.co.kr -> foo)
+    labels = [p for p in host_lower.split(".") if p not in ("imap", "mail", "www")]
+    if len(labels) >= 2:
+        return labels[-2]
+    return host_lower or "imap"
+
 # 메일 수집 요청
 @app.route("/imap-collect", methods=["POST"])
 def imap_collect():
@@ -1222,7 +1267,7 @@ def imap_collect():
         port = int(data.get("port") or 993)
     except (TypeError, ValueError):
         port = 993
-    
+
     limit_raw = data.get("limit")
     try:
         limit = int(limit_raw) if limit_raw not in (None, "") else 100
@@ -1240,80 +1285,104 @@ def imap_collect():
     if not user_id:
         return jsonify({"ok": False, "error": "user_id가 비어있습니다."}), 400
 
-    print(f"[IMAP-COLLECT] host={host}:{port} ssl={use_ssl} user={user} folders={folders} limit={limit} mode={sync_mode}")
+    job_id = str(uuid.uuid4())[:8]
+    create_job(job_id, job_type="imap_collect")
 
-    fetch_started = time.perf_counter()
-    try:
-        content, attachments = _imap_fetch_content(host, port, use_ssl, user, password, folders, limit, user)
-    except imaplib.IMAP4.error as e:
-        return jsonify({"ok": False, "error": f"IMAP 로그인/연결 오류: {e}"}), 400
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"ok": False, "error": f"IMAP 수집 중 오류: {e}"}), 500
-    fetch_elapsed = time.perf_counter() - fetch_started
-    print(f"[IMAP-COLLECT] 수집 완료: {fetch_elapsed:.2f}초 소요")
+    def _worker():
+        print(f"[IMAP-COLLECT] host={host}:{port} ssl={use_ssl} user={user} folders={folders} limit={limit} mode={sync_mode}")
+        update_job(job_id, status="running", message="IMAP 서버에서 메일 수집 중")
+        broadcast({"type": "progress", "job_id": job_id, "message": "IMAP 서버에서 메일 수집 중"})
 
-    if not content.strip():
-        return jsonify({"ok": True, "added_count": 0, "skipped_count": 0, "message": "수집된 메일이 없습니다."})
+        def _on_batch(folder, batch_num, total_batches, count):
+            msg = f"{folder} 배치 {batch_num}/{total_batches} ({count}개)"
+            update_job(job_id, message=msg)
+            broadcast({"type": "progress", "job_id": job_id, "message": msg})
 
-    filename = f"imap_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.txt"
+        fetch_started = time.perf_counter()
+        try:
+            content, attachments = _imap_fetch_content(
+                host, port, use_ssl, user, password, folders, limit, user, on_batch=_on_batch
+            )
+        except imaplib.IMAP4.error as e:
+            update_job(job_id, status="error", message="실패", error=f"IMAP 로그인/연결 오류: {e}")
+            broadcast({"type": "failed", "job_id": job_id, "message": f"IMAP 로그인/연결 오류: {e}"})
+            return
+        except Exception as e:
+            traceback.print_exc()
+            update_job(job_id, status="error", message="실패", error=f"IMAP 수집 중 오류: {e}")
+            broadcast({"type": "failed", "job_id": job_id, "message": f"IMAP 수집 중 오류: {e}"})
+            return
+        fetch_elapsed = time.perf_counter() - fetch_started
+        print(f"[IMAP-COLLECT] 수집 완료: {fetch_elapsed:.2f}초 소요")
 
-    # 변환된 텍스트/첨부파일을 기존 /upload 엔드포인트 로직에 그대로 위임
-    with app.test_request_context(
-        "/upload", method="POST",
-        json={
-            "filename": filename,
-            "content": content,
-            "attachment": attachments,
-            "syncmode": sync_mode,
-            "user_id": user_id,
-            "is_last": True,
-            "batch_offset": 0,
-        },
-        content_type="application/json",
-    ):
-        result = upload()
+        if not content.strip():
+            result = {"ok": True, "added_count": 0, "skipped_count": 0, "message": "수집된 메일이 없습니다."}
+            update_job(job_id, status="done", message="완료", result=result)
+            broadcast({"type": "done", "job_id": job_id, "message": "완료", "result": result})
+            return
 
-    if isinstance(result, tuple):
-        body, status_code = result[0], result[1]
-    else:
-        body, status_code = result, 200
+        filename = f"imap_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.txt"
+        update_job(job_id, message="수집한 메일 저장/인덱싱 준비 중")
+        broadcast({"type": "progress", "job_id": job_id, "message": "수집한 메일 저장/인덱싱 준비 중"})
+        mail_platform = _detect_imap_platform(host)
 
-    return body, status_code
+        try:
+            with app.test_request_context(
+                "/upload", method="POST",
+                json={
+                    "filename": filename,
+                    "content": content,
+                    "attachment": attachments,
+                    "syncmode": sync_mode,
+                    "user_id": user_id,
+                    "is_last": True,
+                    "batch_offset": 0,
+                    "mail_platform": mail_platform,
+                },
+                content_type="application/json",
+            ):
+                result = upload()
+        except Exception as e:
+            traceback.print_exc()
+            update_job(job_id, status="error", message="실패", error=f"업로드 처리 중 오류: {e}")
+            broadcast({"type": "failed", "job_id": job_id, "message": f"업로드 처리 중 오류: {e}"})
+            return
+
+        body, status_code = result if isinstance(result, tuple) else (result, 200)
+        try:
+            body_data = body.get_json()
+        except Exception:
+            body_data = None
+
+        if status_code >= 400 or not body_data:
+            error_msg = (body_data or {}).get("error", "업로드 처리 실패")
+            update_job(job_id, status="error", message="실패", error=error_msg)
+            broadcast({"type": "failed", "job_id": job_id, "message": error_msg})
+            return
+
+        update_job(job_id, status="done", message="완료", result=body_data)
+        broadcast({"type": "done", "job_id": job_id, "message": "완료", "result": body_data})
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return jsonify({"ok": True, "jobId": job_id})
+
+@app.route('/imap-collect-status/<job_id>', methods=['GET'])
+def imap_collect_status(job_id):
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"status": "not_found"}), 404
+
+    return jsonify({
+        "status": job["status"],
+        "message": job.get("message", ""),
+        "result": job.get("result"),
+        "error": job.get("error"),
+    })
 
 # 지금까지 인덱싱된 유저 반환
 @app.route("/accounts", methods=["GET"])
-def list_accounts():
-    user_data_dir = os.path.join(BASE_DIR, "user_data")
-    accounts = []
-
-    if os.path.isdir(user_data_dir):
-        for dir_name in sorted(os.listdir(user_data_dir)):
-            dir_path = os.path.join(user_data_dir, dir_name)
-            if not os.path.isdir(dir_path):
-                continue
-
-            meta_path = os.path.join(dir_path, "account.json")
-            user_id = None
-            if os.path.exists(meta_path):
-                try:
-                    with open(meta_path, "r", encoding="utf-8") as f:
-                        user_id = (json.load(f).get("user_id") or "").strip()
-                except (OSError, json.JSONDecodeError):
-                    user_id = None
-
-            if not user_id:
-                # 메타 파일이 아직 없는 계정(이 기능 추가 이전에 만들어진 폴더) →
-                # 폴더명에서 최선으로 역추정만 하고, 파일에 쓰지는 않는다.
-                user_id = dir_name.replace("_at_", "@", 1).replace("_", ".")
-
-            paths = UserPaths(BASE_DIR, user_id)
-            accounts.append({
-                "user_id": user_id,
-                "indexed": _is_index_ready(paths),
-            })
-
-    return jsonify({"accounts": accounts})
+def accounts_route():
+    return jsonify({"accounts": list_accounts(BASE_DIR)})
 
 # 정적 파일을 vite 빌드 없이 소스에서 직접 서빙하는 라우트. 브라우저가 들어오면 flask+url을 localStorage에 저장 및 홈화면으로 리다이렉트
 @app.route('/imap-start')

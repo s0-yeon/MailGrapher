@@ -5,9 +5,9 @@ import math
 import re
 from datetime import date
 from config.db import get_db_connection
-from util.database.db_writer import get_latest_user_record
+from util.database.db_writer import get_latest_mail_account
 
-_PARQUET_TONE_SCORE = {
+_KG_TONE_SCORE = {
     "casual":        1.0,
     "transactional": 0.5,
     "formal":        0.2,
@@ -18,8 +18,8 @@ _LAMBDA = 0.01
 
 
 def calculate_eis(
-    user_account_id: str,
-    person_account_id: str,
+    user_mail_account_id: str,
+    person_mail_account_id: str,
     update_date: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -27,7 +27,7 @@ def calculate_eis(
     apply_time_decay: bool = True,
 ) -> dict:
     """
-    update_date 생략 시 DB에서 MAX(update_date)를 자동 조회.
+    update_date 생략 시 DB에서 MAX(index_date)를 자동 조회.
     start_date / end_date 지정 시 mail_date 범위로 추가 필터링.
 
     Returns:
@@ -50,21 +50,21 @@ def calculate_eis(
     cursor = conn.cursor(dictionary=True)
     try:
         if update_date is None:
-            latest = get_latest_user_record(user_account_id)
-            update_date = latest["update_date"] if latest else None
+            latest = get_latest_mail_account(user_mail_account_id)
+            update_date = latest["index_date"] if latest else None
 
         date_filter = ""
-        params = [user_account_id, update_date, person_account_id, person_account_id]
+        params = [user_mail_account_id, update_date, person_mail_account_id, person_mail_account_id]
         if start_date and end_date:
             date_filter = "AND mail_date BETWEEN %s AND %s"
             params += [start_date, end_date]
 
         sql = f"""
-            SELECT direction, parquet_tone, llm_tone,
+            SELECT direction, kg_tone, llm_tone,
                    is_reply, reply_elapsed_hours, mail_date
             FROM mail
-            WHERE user_account_id = %s
-              AND update_date = %s
+            WHERE user_mail_account_id = %s
+              AND index_date = %s
               AND (
                 (direction = 'sent'     AND receiver LIKE CONCAT('%<', %s, '>%'))
                 OR
@@ -106,13 +106,13 @@ def calculate_eis(
     else:
         tone_scores = []
         for r in rows:
-            parquet_score = _PARQUET_TONE_SCORE.get(r["parquet_tone"] or "", 0.0)
+            kg_score = _KG_TONE_SCORE.get(r["kg_tone"] or "", 0.0)
             llm = r["llm_tone"]
             if llm is None:
-                tone_scores.append(parquet_score)
+                tone_scores.append(kg_score)
             else:
                 llm_score = 1.0 if llm == "friendly" else 0.0
-                tone_scores.append((parquet_score + llm_score) / 2)
+                tone_scores.append((kg_score + llm_score) / 2)
         T = sum(tone_scores) / len(tone_scores)
 
     # ── 4. 통합 EIS ───────────────────────────────────────────────────────
@@ -220,16 +220,16 @@ def get_keyword_stats(paths): # 메일 키워드 수
 
 # 친밀한 사람 친밀도 수치 (볼륨 보정·시간 감쇠 없이 EIS 기반)
 def get_high_affinity_person_stats(paths):
-    latest = get_latest_user_record(paths.USER_ID)
+    latest = get_latest_mail_account(paths.USER_ID)
     if not latest:
         return []
-    update_date = latest["update_date"]
+    update_date = latest["index_date"]
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT person_account_id, person_name FROM person WHERE user_account_id = %s AND update_date = %s",
+            "SELECT person_mail_account_id, person_name FROM person WHERE user_mail_account_id = %s AND index_date = %s",
             (paths.USER_ID, update_date),
         )
         persons = cursor.fetchall()
@@ -240,14 +240,14 @@ def get_high_affinity_person_stats(paths):
     result = []
     for person in persons:
         eis = calculate_eis(
-            user_account_id=paths.USER_ID,
-            person_account_id=person["person_account_id"],
+            user_mail_account_id=paths.USER_ID,
+            person_mail_account_id=person["person_mail_account_id"],
             update_date=update_date,
             apply_volume_correction=False,
             apply_time_decay=False,
         )
         result.append({
-            "email": person["person_account_id"],
+            "email": person["person_mail_account_id"],
             "name":  person.get("person_name", ""),
             "affinity": eis["EIS_final"],
         })
@@ -262,9 +262,9 @@ def get_keywords_by_person_date(user_id: str, person_user_id: str, start_date: s
     try:
         sql = """
             SELECT keyword_name, mail_date, SUM(daily_count) AS day_count
-            FROM keyword_mail
-            WHERE user_account_id   = %s
-              AND person_account_id = %s
+            FROM mail_keyword
+            WHERE user_mail_account_id   = %s
+              AND person_mail_account_id = %s
               AND mail_date BETWEEN %s AND %s
             GROUP BY keyword_name, mail_date
             ORDER BY mail_date
@@ -295,7 +295,7 @@ def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT MAX(update_date) AS ud FROM user WHERE user_account_id = %s", (user_id,))
+        cursor.execute("SELECT MAX(index_date) AS ud FROM mail_account WHERE user_mail_account_id = %s", (user_id,))
         update_date = cursor.fetchone()["ud"]
 
         like_param = f"%{person_mail_id}%"
@@ -305,8 +305,8 @@ def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
             SUM(CASE WHEN direction = 'sent'     AND receiver LIKE %s THEN 1 ELSE 0 END) AS sent,
             SUM(CASE WHEN direction = 'received' AND sender   LIKE %s THEN 1 ELSE 0 END) AS received
         FROM mail
-        WHERE user_account_id = %s
-          AND update_date = %s
+        WHERE user_mail_account_id = %s
+          AND index_date = %s
           AND mail_date BETWEEN %s AND %s
           AND (
             (direction = 'sent'     AND receiver LIKE %s) OR
@@ -368,15 +368,15 @@ def get_person_mail_ids_in_range(user_id, person_mail_id, start_date, end_date) 
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT MAX(update_date) AS ud FROM user WHERE user_account_id = %s", (user_id,))
+        cursor.execute("SELECT MAX(index_date) AS ud FROM mail_account WHERE user_mail_account_id = %s", (user_id,))
         update_date = cursor.fetchone()["ud"]
 
         like_param = f"%{person_mail_id}%"
         sql = """
         SELECT mail_id, direction, mail_date
         FROM mail
-        WHERE user_account_id = %s
-          AND update_date = %s
+        WHERE user_mail_account_id = %s
+          AND index_date = %s
           AND mail_date BETWEEN %s AND %s
           AND (
             (direction = 'sent'     AND receiver LIKE %s) OR
@@ -400,15 +400,15 @@ def get_date_range_person_stats(user_id, start_date, end_date, sort_by):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT MAX(update_date) AS ud FROM user WHERE user_account_id = %s", (user_id,))
+        cursor.execute("SELECT MAX(index_date) AS ud FROM mail_account WHERE user_mail_account_id = %s", (user_id,))
         update_date = cursor.fetchone()["ud"]
 
         direction_filter = "sent" if sort_by == "sent" else "received"
         sql = """
         SELECT sender, receiver, direction
         FROM mail
-        WHERE user_account_id = %s
-          AND update_date = %s
+        WHERE user_mail_account_id = %s
+          AND index_date = %s
           AND mail_date BETWEEN %s AND %s
           AND direction = %s
         """
@@ -446,9 +446,9 @@ def get_mail_date_range(user_id):
         sql = """
         SELECT MIN(mail_date) AS first_date, MAX(mail_date) AS last_date
         FROM mail
-        WHERE user_account_id = %s
-          AND update_date = (
-              SELECT MAX(update_date) FROM user WHERE user_account_id = %s
+        WHERE user_mail_account_id = %s
+          AND index_date = (
+              SELECT MAX(index_date) FROM mail_account WHERE user_mail_account_id = %s
           )
         """
         cursor.execute(sql, (user_id, user_id))
@@ -469,10 +469,10 @@ def get_mail_sync_stats(paths): # 메일 동기화시 동기화된 메일 수, �
 
     try:
         sql = """
-        SELECT my_mail_count, index_time, update_date
-        FROM user
-        WHERE user_account_id = %s
-        ORDER BY update_date DESC
+        SELECT mail_count, index_time, index_date
+        FROM mail_account
+        WHERE user_mail_account_id = %s
+        ORDER BY index_date DESC
         LIMIT 1
         """
         cursor.execute(sql, (paths.USER_ID,))
@@ -485,14 +485,14 @@ def get_mail_sync_stats(paths): # 메일 동기화시 동기화된 메일 수, �
                 "sync_update_date": None
             }
 
-        update_date = row["update_date"]
-        if update_date is not None:
-            sync_update_date = update_date.strftime("%Y-%m-%d")
+        index_date = row["index_date"]
+        if index_date is not None:
+            sync_update_date = index_date.strftime("%Y-%m-%d")
         else:
             sync_update_date = None
 
         return {
-            "mail_count": row["my_mail_count"],
+            "mail_count": row["mail_count"],
             "sync_time": row["index_time"],
             "sync_update_date": sync_update_date
         }
@@ -503,19 +503,20 @@ def get_mail_sync_stats(paths): # 메일 동기화시 동기화된 메일 수, �
 
 
 def get_person_descriptions(user_id: str) -> list:
-    latest_user = get_latest_user_record(user_id)
-    if not latest_user:
+    latest_account = get_latest_mail_account(user_id)
+    if not latest_account:
         return []
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        # person_account_id로 alias: 프론트/avatar_generator가 기대하는 기존 API 응답 키 유지
         cursor.execute("""
-            SELECT person_account_id, person_name, description
+            SELECT person_mail_account_id AS person_account_id, person_name, description
             FROM person
-            WHERE user_account_id = %s AND update_date = %s
+            WHERE user_mail_account_id = %s AND index_date = %s
               AND description IS NOT NULL AND description != ''
-        """, (latest_user["user_account_id"], latest_user["update_date"]))
+        """, (latest_account["user_mail_account_id"], latest_account["index_date"]))
         return cursor.fetchall()
     finally:
         cursor.close()

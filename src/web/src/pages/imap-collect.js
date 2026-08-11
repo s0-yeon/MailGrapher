@@ -8,6 +8,50 @@ function now() {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+// ── 진행 중/완료된 수집 job 목록을 localStorage에 남겨서, 페이지를 벗어났다 돌아와도 이어서 볼 수 있게 함 ──
+const IMAP_JOBS_STORAGE_KEY = 'gw_imap_jobs';
+const IMAP_JOBS_STORAGE_MAX = 15;
+
+function loadStoredImapJobs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(IMAP_JOBS_STORAGE_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function addStoredImapJob(jobId, user) {
+  const jobs = loadStoredImapJobs();
+  jobs.push({ jobId, user });
+  localStorage.setItem(IMAP_JOBS_STORAGE_KEY, JSON.stringify(jobs.slice(-IMAP_JOBS_STORAGE_MAX)));
+}
+
+function removeStoredImapJob(jobId) {
+  const jobs = loadStoredImapJobs().filter(j => j.jobId !== jobId);
+  localStorage.setItem(IMAP_JOBS_STORAGE_KEY, JSON.stringify(jobs));
+}
+
+// ── 인덱싱까지 끝난 패널을 잠시 보여준 뒤 목록에서 제거 ──
+function dismissJobPanel(panelEl, collectJobId, delayMs = 5000) {
+  removeStoredImapJob(collectJobId);
+  setTimeout(() => {
+    panelEl.style.transition = 'opacity 0.4s ease';
+    panelEl.style.opacity = '0';
+    setTimeout(() => {
+      panelEl.remove();
+      const jobsList = document.getElementById('jobs-list');
+      if (jobsList && !jobsList.children.length) {
+        jobsList.innerHTML = `
+          <div class="gw-log-empty" id="jobs-list-empty">
+            <i class="bi bi-clock-history" style="font-size:1.2rem;"></i>
+            수집을 시작하면 이곳에 로그가 표시됩니다.
+          </div>`;
+      }
+    }, 400);
+  }, delayMs);
+}
+
 // ── 수집 개수 "사용자 지정" 선택 시 입력칸 노출 ──
 function toggleCustomLimit() {
   const select = document.getElementById('collect-limit');
@@ -40,6 +84,22 @@ function applyPreset(el) {
 
   // 다른 서비스로 바꾸면 이전 계정용 비밀번호는 의미가 없으니 같이 비움
   document.getElementById('imap-pass').value = '';
+}
+
+// ── 수집 시작 직후 폼을 처음 상태로 되돌려서 바로 다른 계정을 입력할 수 있게 함 ──
+function resetForm() {
+  const gmailChip = document.querySelector('.gw-preset-chip[data-host="imap.gmail.com"]');
+  if (gmailChip) applyPreset(gmailChip);
+
+  document.getElementById('folder-list').innerHTML =
+    '<span class="gw-folder-empty">"폴더 불러오기"를 눌러 수집할 폴더를 선택하세요.</span>';
+  document.getElementById('select-all-btn').style.display = 'none';
+  document.getElementById('folder-list-hint').textContent = '';
+
+  document.getElementById('collect-limit').value = '0';
+  toggleCustomLimit();
+  document.getElementById('collect-limit-custom').value = '';
+  document.getElementById('sync-mode').value = 'append';
 }
 
 // ── 폴더 토글 ──
@@ -163,12 +223,9 @@ async function listFolders() {
   }
 }
 
-// ── 로그 추가 ──
-function addLog(msg, type = '') {
-  const body = document.getElementById('log-body');
-  const empty = document.getElementById('log-empty');
-  if (empty) empty.remove();
-
+// ── job 패널 안에 로그 한 줄 추가 ──
+function jobAddLog(panelEl, msg, type = '') {
+  const body = panelEl.querySelector('.job-log-body');
   const line = document.createElement('div');
   line.className = 'gw-log-line';
   line.innerHTML = `
@@ -179,21 +236,169 @@ function addLog(msg, type = '') {
   body.scrollTop = body.scrollHeight;
 }
 
-// ── 상태 배지 업데이트 ──
-function setStatus(status, label) {
-  const badge = document.getElementById('log-status-badge');
-  const dot = document.getElementById('log-status-dot');
-  const text = document.getElementById('log-status-text');
-  badge.className = `gw-status-badge ${status}`;
-  dot.className = `gw-status-dot ${status === 'running' ? 'running' : ''}`;
+function jobSetStatus(panelEl, status, label) {
+  const badge = panelEl.querySelector('.job-status-badge');
+  const dot = panelEl.querySelector('.job-status-dot');
+  const text = panelEl.querySelector('.job-status-text');
+  badge.className = `gw-status-badge job-status-badge ${status}`;
+  dot.className = `gw-status-dot job-status-dot ${status === 'running' ? 'running' : ''}`;
   text.textContent = label;
 }
 
-function setProgress(pct) {
-  document.getElementById('log-progress-bar').style.width = pct + '%';
+function jobSetProgress(panelEl, pct) {
+  panelEl.querySelector('.job-progress-bar').style.width = pct + '%';
 }
 
-// ── 수집 시작 ──
+// ── 계정 하나의 수집 job 패널을 목록 맨 위에 새로 생성 ──
+function createJobPanel(user) {
+  const jobsList = document.getElementById('jobs-list');
+  const empty = document.getElementById('jobs-list-empty');
+  if (empty) empty.remove();
+
+  const panelEl = document.createElement('div');
+  panelEl.className = 'gw-log-panel visible';
+  panelEl.innerHTML = `
+    <div class="gw-log-header">
+      <div class="gw-log-header-left">
+        <i class="bi bi-terminal" style="color:#26B99A;"></i>
+        ${user}
+      </div>
+      <div class="gw-status-badge running job-status-badge">
+        <span class="gw-status-dot running job-status-dot"></span>
+        <span class="job-status-text">시작 중</span>
+      </div>
+    </div>
+    <div class="gw-progress-bar-wrap">
+      <div class="gw-progress-bar-fill job-progress-bar" style="width:5%;"></div>
+    </div>
+    <div class="gw-log-body job-log-body"></div>
+    <div class="gw-result-row job-result-row" style="display:none;">
+      <div class="gw-result-chip">
+        <i class="bi bi-envelope-check"></i>
+        <strong class="job-result-added">0</strong>
+        <span>개 수집</span>
+      </div>
+      <div class="gw-result-chip">
+        <i class="bi bi-skip-forward"></i>
+        <strong class="job-result-skipped">0</strong>
+        <span>개 중복 스킵</span>
+      </div>
+      <a class="gw-collect-btn" href="/dashboard/" style="padding:8px 20px;font-size:0.85rem;box-shadow:none;text-decoration:none;">
+        <i class="bi bi-arrow-right-circle"></i>
+        대시보드로 이동
+      </a>
+    </div>
+  `;
+  jobsList.prepend(panelEl);
+  return panelEl;
+}
+
+// ── SSE: 폴링 대신 서버가 push하는 이벤트로 진행상황을 받는다. 페이지당 연결 하나만 유지하고,
+// 들어오는 이벤트의 job_id로 어느 패널(수집 job/인덱싱 job)에 해당하는지 찾아서 갱신한다. ──
+const activeJobs = new Map(); // job_id -> { panelEl, phase: 'collect' | 'index', collectJobId, user }
+let sseConn = null;
+
+function ensureSSE(flaskUrl) {
+  if (sseConn) return sseConn;
+  sseConn = new EventSource(`${flaskUrl}/indexing-stream`);
+  sseConn.onmessage = (e) => {
+    let data;
+    try { data = JSON.parse(e.data); } catch { return; }
+    if (data && data.job_id) handleJobEvent(data);
+  };
+  sseConn.onerror = () => {
+    // 브라우저가 자동으로 재연결을 시도하므로 별도 처리 없이 로그만 남김
+    console.warn('[imap-collect] SSE 연결 끊김, 자동 재연결 시도 중...');
+  };
+  return sseConn;
+}
+
+function handleJobEvent(data) {
+  const entry = activeJobs.get(data.job_id);
+  if (!entry) return; // 이 페이지가 추적 중인 job이 아니면 무시 (다른 계정/다른 탭의 이벤트일 수 있음)
+
+  const { panelEl, phase, collectJobId, user } = entry;
+
+  if (data.type === 'progress') {
+    if (data.message) jobAddLog(panelEl, data.message, phase === 'index' ? 'info' : '');
+    return;
+  }
+
+  if (data.type === 'failed') {
+    jobSetStatus(panelEl, 'failed', phase === 'index' ? '인덱싱 실패' : '실패');
+    jobAddLog(panelEl, `❌ ${data.message || '오류가 발생했습니다.'}`, 'error');
+    activeJobs.delete(data.job_id);
+    dismissJobPanel(panelEl, collectJobId);
+    return;
+  }
+
+  if (data.type !== 'done') return;
+
+  if (phase === 'index') {
+    jobSetStatus(panelEl, 'done', '인덱싱 완료');
+    jobAddLog(panelEl, `✅ 인덱싱 완료`, 'success');
+    activeJobs.delete(data.job_id);
+    dismissJobPanel(panelEl, collectJobId);
+    return;
+  }
+
+  // phase === 'collect'
+  const result = data.result || {};
+  activeJobs.delete(data.job_id);
+
+  if (result.ok === false) {
+    jobSetStatus(panelEl, 'failed', '실패');
+    jobAddLog(panelEl, `❌ ${result.error || '알 수 없는 오류'}`, 'error');
+    dismissJobPanel(panelEl, collectJobId);
+    return;
+  }
+
+  // 이후 대시보드(index.html 등)가 이 값을 user_id로 사용한다.
+  localStorage.setItem('gw_user_id', user);
+
+  jobSetProgress(panelEl, 100);
+  jobSetStatus(panelEl, 'done', '완료');
+  jobAddLog(panelEl, `✅ 수집 완료`, 'success');
+  jobAddLog(panelEl, `수집: ${result.added_count}개 / 중복 스킵: ${result.skipped_count}개`, 'success');
+
+  panelEl.querySelector('.job-result-added').textContent = result.added_count ?? 0;
+  panelEl.querySelector('.job-result-skipped').textContent = result.skipped_count ?? 0;
+  panelEl.querySelector('.job-result-row').style.display = 'flex';
+
+  if (result.job_id) {
+    jobAddLog(panelEl, `인덱싱 job_id: ${result.job_id} — 인덱싱이 백그라운드에서 실행됩니다.`, 'info');
+    jobSetStatus(panelEl, 'running', '인덱싱 중');
+    jobAddLog(panelEl, '인덱싱이 백그라운드에서 진행 중입니다...', 'info');
+    activeJobs.set(result.job_id, { panelEl, phase: 'index', collectJobId, user });
+  } else {
+    dismissJobPanel(panelEl, collectJobId);
+  }
+}
+
+// job을 SSE로 추적 시작. SSE는 "연결 이후"의 이벤트만 받으므로, 연결 전에 이미 끝나버린 job을
+// 놓치지 않도록 상태를 한 번 REST로 확인해서 따라잡은 뒤(catch-up) 이어지는 진행상황은 SSE로 받는다.
+function trackCollectJob(flaskUrl, jobId, panelEl, user, phase = 'collect', collectJobId = jobId) {
+  ensureSSE(flaskUrl);
+  activeJobs.set(jobId, { panelEl, phase, collectJobId, user });
+
+  fetch(`${flaskUrl}/imap-collect-status/${jobId}`)
+    .then(res => res.json())
+    .then(job => {
+      if (job.status === 'not_found') {
+        handleJobEvent({ type: 'failed', job_id: jobId, message: '작업을 찾을 수 없습니다.' });
+      } else if (job.status === 'done') {
+        handleJobEvent({ type: 'done', job_id: jobId, result: job.result });
+      } else if (job.status === 'error' || job.status === 'failed') {
+        handleJobEvent({ type: 'failed', job_id: jobId, message: job.error || job.message });
+      }
+      // 그 외(아직 진행 중)에는 아무것도 안 하고 SSE로 이어받는다 (entry는 이미 등록해둠)
+    })
+    .catch(() => {
+      // 상태 확인 자체가 실패해도 SSE로 이어받을 수 있으니 조용히 무시
+    });
+}
+
+// ── 수집 시작: 요청만 보내고 바로 폼을 다시 쓸 수 있게 반환, 진행 추적은 패널별로 백그라운드에서 계속 ──
 async function startCollect() {
   const flaskUrl = getApiBase();
   const host = document.getElementById('imap-host').value.trim();
@@ -217,35 +422,27 @@ async function startCollect() {
   if (folders.length === 0) { alert('수집할 폴더를 하나 이상 선택하세요.'); return; }
   if (!flaskUrl) { alert('Flask 서버 URL이 설정되지 않았습니다.\n/init 페이지를 먼저 방문하세요.'); return; }
 
-  // UI: 수집 중 상태
   const btn = document.getElementById('collect-btn');
   const spinner = document.getElementById('collect-spinner');
   const icon = document.getElementById('collect-icon');
   const hint = document.getElementById('collect-hint');
 
+  // 요청 보내는 짧은 동안만 버튼을 잠근다 (같은 계정으로 중복 클릭 방지용).
+  // job이 시작되고 나면 바로 풀어줘서 다른 계정으로 이어서 수집을 시작할 수 있게 한다.
   btn.disabled = true;
   spinner.classList.add('visible');
   icon.style.display = 'none';
   hint.textContent = '서버에 연결 중...';
 
-  // 로그 패널 표시
-  document.getElementById('log-panel').classList.add('visible');
-  document.getElementById('result-row').style.display = 'none';
+  const panelEl = createJobPanel(user);
+  jobAddLog(panelEl, `IMAP 연결 시작: ${host}:${port} (SSL: ${ssl})`);
+  jobAddLog(panelEl, `계정: ${user}`);
+  jobAddLog(panelEl, `폴더: ${folders.join(', ')}`);
+  jobAddLog(panelEl, `수집 개수: ${limit === 0 ? '전체' : limit + '개'} / 모드: ${syncMode}`);
 
-  // 로그 초기화
-  const body = document.getElementById('log-body');
-  body.innerHTML = '';
-  setStatus('running', '수집 중');
-  setProgress(5);
-
-  addLog(`IMAP 연결 시작: ${host}:${port} (SSL: ${ssl})`);
-  addLog(`계정: ${user}`);
-  addLog(`폴더: ${folders.join(', ')}`);
-  addLog(`수집 개수: ${limit === 0 ? '전체' : limit + '개'} / 모드: ${syncMode}`);
-
+  let started;
   try {
-    setProgress(20);
-    addLog('Flask 서버에 수집 요청 전송 중...');
+    jobAddLog(panelEl, 'Flask 서버에 수집 요청 전송 중...');
 
     const res = await fetch(`${flaskUrl}/imap-collect`, {
       method: 'POST',
@@ -257,48 +454,38 @@ async function startCollect() {
       })
     });
 
-    setProgress(60);
-
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`서버 오류 (${res.status}): ${err.slice(0, 200)}`);
     }
 
-    const data = await res.json();
-
-    if (!data.ok) {
-      throw new Error(data.error || '알 수 없는 오류');
+    started = await res.json();
+    if (!started.ok || !started.jobId) {
+      throw new Error(started.error || '수집 작업을 시작하지 못했습니다.');
     }
-
-    // 이후 대시보드(index.html 등)가 이 값을 user_id로 사용한다.
-    localStorage.setItem('gw_user_id', user);
-
-    setProgress(100);
-    setStatus('done', '완료');
-    addLog(`✅ 수집 완료`, 'success');
-    addLog(`수집: ${data.added_count}개 / 중복 스킵: ${data.skipped_count}개`, 'success');
-    if (data.job_id) {
-      addLog(`인덱싱 job_id: ${data.job_id} — 인덱싱이 백그라운드에서 실행됩니다.`, 'info');
-    }
-
-    // 결과 요약 표시
-    document.getElementById('result-added').textContent = data.added_count ?? 0;
-    document.getElementById('result-skipped').textContent = data.skipped_count ?? 0;
-    document.getElementById('result-row').style.display = 'flex';
-
-    hint.textContent = `완료: ${data.added_count}개 수집됨`;
-
   } catch (err) {
-    setStatus('failed', '실패');
-    setProgress(0);
-    addLog(`❌ ${err.message}`, 'error');
+    jobSetStatus(panelEl, 'failed', '실패');
+    jobAddLog(panelEl, `❌ ${err.message}`, 'error');
     hint.textContent = '수집 실패. 로그를 확인하세요.';
     console.error('[imap-collect]', err);
-  } finally {
     btn.disabled = false;
     spinner.classList.remove('visible');
     icon.style.display = '';
+    return;
   }
+
+  btn.disabled = false;
+  spinner.classList.remove('visible');
+  icon.style.display = '';
+  hint.textContent = '수집이 백그라운드에서 진행 중입니다. 다른 계정도 바로 시작할 수 있습니다.';
+
+  jobSetProgress(panelEl, 20);
+  jobAddLog(panelEl, '메일 수집이 백그라운드에서 시작됐습니다. 진행 상황을 확인하는 중...');
+
+  addStoredImapJob(started.jobId, user);
+  resetForm();
+
+  trackCollectJob(flaskUrl, started.jobId, panelEl, user);
 }
 
 // ── 이벤트 바인딩 ──
@@ -335,4 +522,15 @@ const userInput = document.getElementById('imap-user');
 if (userInput.value.startsWith('@')) {
   userInput.focus();
   setTimeout(() => userInput.setSelectionRange(0, 0), 0);
+}
+
+// 이전에 시작해둔 수집 job이 있으면 (다른 페이지 갔다 돌아온 경우 포함) 패널을 복원하고 이어서 추적
+const storedJobs = loadStoredImapJobs();
+if (storedJobs.length > 0) {
+  const flaskUrl = getApiBase();
+  storedJobs.forEach(({ jobId, user }) => {
+    const panelEl = createJobPanel(user);
+    jobAddLog(panelEl, '이전 수집 작업 상태를 이어서 확인하는 중...');
+    trackCollectJob(flaskUrl, jobId, panelEl, user);
+  });
 }
