@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:* https://api.example.com https://*.googleapis.com https://*.ngrok-free.dev https://*.ngrok-free.app https://*.ngrok.io; frame-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta
+      http-equiv="Referrer-Policy"
+      content="strict-origin-when-cross-origin"
+    />
+    <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+    <title>메신저 분석 | MailGrapher</title>
+    <script type="module" src="/src/pages/messenger.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:SOFT,WONK,opsz,wght@0,0,9..144,100..900&display=block"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body class="page-messenger">
+    <div class="container body">
+      <div class="main_container">
+        <div id="app-header"></div>
+
+        <main class="right_col" role="main" style="padding: 0">
+          <div class="mg-app">
+            <aside class="mg-sidebar">
+              <div class="mg-sidebar-title">
+                <span class="mg-logo-dot"></span> CHAT ROOMS
+              </div>
+              <div id="mg-room-list" class="mg-room-list"></div>
+            </aside>
+
+            <section class="mg-main">
+              <header class="mg-main-header">
+                <div class="mg-header-top">
+                  <div class="mg-header-titles">
+                    <h1 id="mg-room-name">-</h1>
+                    <div class="mg-header-stats">
+                      <span>참여자 <strong id="mg-stat-members">-</strong>명</span>
+                      <span>총 메시지 <strong id="mg-stat-messages">-</strong></span>
+                      <span>분위기 <strong id="mg-stat-mood">-</strong>%</span>
+                    </div>
+                  </div>
+                  <div class="mg-range-toggle" role="tablist">
+                    <button type="button" class="mg-range-btn active" data-range="realtime" role="tab" aria-selected="true">실시간</button>
+                    <button type="button" class="mg-range-btn" data-range="7d" role="tab" aria-selected="false">7일</button>
+                    <button type="button" class="mg-range-btn" data-range="30d" role="tab" aria-selected="false">30일</button>
+                  </div>
+                </div>
+
+                <div class="mg-tab-bar" role="tablist">
+                  <button type="button" class="mg-tab-btn active" data-tab="network" role="tab" aria-selected="true">관계망</button>
+                  <button type="button" class="mg-tab-btn" data-tab="sentiment" role="tab" aria-selected="false">감정 분석</button>
+                  <button type="button" class="mg-tab-btn" data-tab="activity" role="tab" aria-selected="false">활동 통계</button>
+                </div>
+              </header>
+
+              <div class="mg-tab-panels">
+                <div id="mg-panel-network" class="mg-tab-panel active"></div>
+                <div id="mg-panel-sentiment" class="mg-tab-panel"></div>
+                <div id="mg-panel-activity" class="mg-tab-panel"></div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <footer id="app-footer"></footer>
+      </div>
+    </div>
+  </body>
+</html>

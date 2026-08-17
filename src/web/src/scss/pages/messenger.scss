@@ -1,0 +1,583 @@
+// messenger.html 전용 스타일. 다른 화면들과 같은 라이트 "Luxury Forest Green" 팔레트
+// (scss/_variables.scss의 --gt-* 토큰)를 그대로 끌어써서 색감을 통일한다
+// (mypeople.scss가 .right_col을 오버라이드하는 것과 동일 선례).
+
+body,
+html {
+  overflow: hidden;
+}
+footer {
+  display: none !important;
+}
+
+.top_nav {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  z-index: 1000 !important;
+}
+
+.right_col {
+  position: fixed !important;
+  top: 57px !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.mg-app {
+  // dataviz 스킬 팔레트(라이트 모드) 토큰 — 사이트 공통 --gt-* 변수를 그대로 참조해서
+  // 이 페이지 스코프 안에서 --mg-* 별칭으로 쓴다 (다른 화면과 색감 통일).
+  --mg-surface: var(--gt-body-bg);
+  --mg-surface-card: var(--gt-content-bg);
+  --mg-surface-raised: var(--gt-gray-50);
+  --mg-border: var(--gt-border-color);
+  --mg-text-primary: var(--gt-text-dark);
+  --mg-text-secondary: var(--gt-text-primary);
+  --mg-text-muted: var(--gt-text-muted);
+  --mg-accent: var(--gt-primary);
+  --mg-good: var(--gt-success);
+  --mg-warning: var(--gt-warning);
+  --mg-critical: var(--gt-danger);
+
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: var(--mg-surface);
+  color: var(--mg-text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+// ── 좌측 채팅방 사이드바 ──
+.mg-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--mg-surface-card);
+  border-right: 1px solid var(--mg-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.mg-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mg-text-muted);
+}
+
+.mg-logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mg-accent);
+  box-shadow: 0 0 8px var(--mg-accent);
+}
+
+.mg-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 10px 16px;
+}
+
+.mg-room-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: var(--mg-surface-raised);
+  }
+
+  &.active {
+    background: var(--mg-surface-raised);
+    border-color: rgba(26, 158, 110, 0.35);
+    box-shadow: inset 3px 0 0 var(--mg-accent);
+  }
+}
+
+.mg-room-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mg-room-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mg-room-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.mg-badge-high {
+  color: var(--mg-critical);
+  background: rgba(224, 82, 82, 0.14);
+}
+.mg-badge-med {
+  color: var(--mg-warning);
+  background: rgba(212, 168, 67, 0.16);
+}
+.mg-badge-low {
+  color: var(--mg-text-muted);
+  background: rgba(138, 158, 150, 0.14);
+}
+
+.mg-room-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--mg-text-muted);
+}
+
+// ── 우측 메인 영역 ──
+.mg-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.mg-main-header {
+  padding: 20px 28px 0;
+  border-bottom: 1px solid var(--mg-border);
+  flex-shrink: 0;
+}
+
+.mg-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.mg-header-titles h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.mg-header-stats {
+  display: flex;
+  gap: 18px;
+  font-size: 12.5px;
+  color: var(--mg-text-secondary);
+
+  strong {
+    color: var(--mg-text-primary);
+    font-weight: 700;
+  }
+}
+
+.mg-range-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 999px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.mg-range-btn {
+  border: none;
+  background: transparent;
+  color: var(--mg-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+
+  &.active {
+    background: var(--mg-accent);
+    color: #ffffff;
+  }
+}
+
+.mg-tab-bar {
+  display: flex;
+  gap: 22px;
+}
+
+.mg-tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--mg-text-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 10px 2px 12px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+
+  &.active {
+    color: var(--mg-text-primary);
+    border-bottom-color: var(--mg-accent);
+  }
+}
+
+.mg-tab-panels {
+  flex: 1;
+  padding: 22px 28px 32px;
+}
+
+.mg-tab-panel {
+  display: none;
+}
+.mg-tab-panel.active {
+  display: block;
+}
+
+// ── 공통 카드/차트 chrome ──
+.mg-card {
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  padding: 16px 18px 18px;
+}
+
+.mg-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mg-text-muted);
+  margin-bottom: 10px;
+}
+
+.mg-chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--mg-text-secondary);
+  margin-bottom: 6px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+}
+
+.mg-axis-label {
+  fill: var(--mg-text-muted);
+  font-size: 10.5px;
+}
+
+.mg-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.mg-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mg-text-primary);
+  box-shadow: var(--gt-shadow-lg);
+  white-space: nowrap;
+
+  strong {
+    font-weight: 700;
+  }
+  .mg-tooltip-sub {
+    display: block;
+    color: var(--mg-text-muted);
+    font-size: 11px;
+  }
+}
+
+// ── 관계망 탭 ──
+.mg-network-root {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  height: calc(100vh - 260px);
+  min-height: 420px;
+}
+
+.mg-network-graph {
+  position: relative;
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mg-network-graph-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--mg-text-muted);
+  margin-bottom: 8px;
+}
+
+.mg-network-svg {
+  flex: 1;
+  min-height: 0;
+}
+
+.mg-node-label {
+  fill: var(--mg-text-secondary);
+  font-size: 11px;
+}
+.mg-node-pct {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.mg-node-initial {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mg-network-list {
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.mg-network-list-item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--mg-border);
+  font-size: 12.5px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.mg-avatar-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mg-network-list-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mg-network-list-count {
+  color: var(--mg-text-muted);
+}
+.mg-network-list-pct {
+  font-weight: 700;
+  color: var(--mg-text-primary);
+  min-width: 42px;
+  text-align: right;
+}
+
+// ── 감정 분석 탭 ──
+.mg-sentiment-top {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.mg-timeline-chart,
+.mg-radar-chart {
+  height: 280px;
+  position: relative;
+}
+
+.mg-score-card {
+  padding-bottom: 8px;
+}
+
+.mg-score-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mg-score-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 64px 52px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--mg-border);
+  font-size: 12.5px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.mg-score-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mg-score-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gt-gray-200);
+  overflow: hidden;
+}
+.mg-score-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+.mg-score-count {
+  color: var(--mg-text-muted);
+  text-align: right;
+}
+.mg-score-pct {
+  font-weight: 700;
+  text-align: right;
+}
+
+// ── 활동 통계 탭 ──
+.mg-activity-top {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.mg-bar-chart {
+  height: 280px;
+  position: relative;
+}
+
+.mg-keyword-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 18px;
+}
+
+.mg-keyword-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--mg-border);
+}
+
+.mg-keyword-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.mg-keyword-word {
+  flex: 1;
+  font-weight: 600;
+}
+.mg-keyword-count {
+  color: var(--mg-text-muted);
+}
+
+.mg-stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.mg-stat-tile {
+  background: var(--mg-surface-card);
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.mg-stat-label {
+  font-size: 12px;
+  color: var(--mg-text-muted);
+  margin-bottom: 8px;
+}
+
+.mg-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: proportional-nums;
+}
+
+.mg-stat-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mg-text-muted);
+  margin-left: 4px;
+}
+
+.mg-stat-delta {
+  font-size: 12px;
+  margin-top: 8px;
+  font-weight: 600;
+}
+.mg-stat-delta-good {
+  color: var(--mg-good);
+}
+
+// ── 반응형: 좁은 화면에서 2단 → 1단 ──
+@media (max-width: 1080px) {
+  .mg-network-root,
+  .mg-sentiment-top,
+  .mg-activity-top {
+    grid-template-columns: 1fr;
+  }
+  .mg-network-root {
+    height: auto;
+  }
+  .mg-stat-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
